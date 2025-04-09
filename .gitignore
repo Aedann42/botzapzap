@@ -1,0 +1,6 @@
+node_modules/
+.env
+representantes.json
+*.log
+.DS_Store
+.local-chromium/
