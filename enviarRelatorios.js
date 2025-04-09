@@ -15,18 +15,22 @@ module.exports = async function enviarRelatorios(client, message) {
     return;
   }
 
-  // Caminho com unidade T:
-  const pastaSetor = path.join(
-    'T:\\Setor',
-    String(pessoa.setor)
-  );
+
+
+  representantes.forEach(rep => {
+    console.log(`Número cadastrado: "${rep.telefone}"`);
+  });
+
+  const pastaBase = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\4 - ABRIL\_GERADOR PDF\IMAGENS`;
+  const pastaSetor = path.join(pastaBase, String(pessoa.setor));
+  
 
   if (!fs.existsSync(pastaSetor)) {
     await client.sendMessage(message.from, 'Não encontrei documentos para seu setor.');
     return;
   }
 
-  const arquivos = fs.readdirSync(pastaSetor).filter(file => file.endsWith('.jpg'));
+  const arquivos = fs.readdirSync(pastaSetor);
 
   if (arquivos.length === 0) {
     await client.sendMessage(message.from, 'Nenhum documento encontrado para seu setor.');

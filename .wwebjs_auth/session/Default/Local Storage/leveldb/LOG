@@ -1,3 +1,6 @@
-2025/04/09-13:26:17.907 31c8 Reusing MANIFEST C:\Users\yuric\whatsapp-bot\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
-2025/04/09-13:26:17.907 31c8 Recovering log #4
-2025/04/09-13:26:17.908 31c8 Reusing old log C:\Users\yuric\whatsapp-bot\.wwebjs_auth\session\Default\Local Storage\leveldb/000004.log 
+2025/04/09-15:38:40.904 30cc Reusing MANIFEST C:\botzapzap\botzapzap\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
+2025/04/09-15:38:40.904 30cc Recovering log #4
+2025/04/09-15:38:40.905 30cc Reusing old log C:\botzapzap\botzapzap\.wwebjs_auth\session\Default\Local Storage\leveldb/000004.log 
+2025/04/09-16:18:51.092 1450 Level-0 table #8: started
+2025/04/09-16:18:51.098 1450 Level-0 table #8: 12712 bytes OK
+2025/04/09-16:18:51.101 1450 Delete type=0 #4

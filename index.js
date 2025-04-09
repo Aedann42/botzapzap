@@ -1,4 +1,3 @@
-// index.js
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
@@ -11,7 +10,11 @@ let atendidos = fs.existsSync(atendidosPath)
   : [];
 
 const client = new Client({
-  authStrategy: new LocalAuth()
+  authStrategy: new LocalAuth(),
+  puppeteer: {
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  }
 });
 
 client.on('qr', qr => qrcode.generate(qr, { small: true }));
@@ -21,10 +24,8 @@ client.on('ready', () => console.log('✅ Bot conectado!'));
 client.on('message', async message => {
   const numero = message.from;
 
-  // Ignora mensagens de grupo
   if (numero.endsWith('@g.us')) return;
 
-  // Primeira mensagem = saudação + menu
   if (!atendidos.includes(numero)) {
     const hora = new Date().getHours();
     const saudacaoBase = hora <= 12 ? 'Bom dia' : 'Boa tarde';
@@ -54,7 +55,6 @@ client.on('message', async message => {
     return;
   }
 
-  // Comandos de menu
   if (message.body.trim() === '1') {
     await enviarRelatorios(client, message);
   } else if (message.body.trim() === '2') {
