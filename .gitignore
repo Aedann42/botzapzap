@@ -4,3 +4,6 @@ representantes.json
 *.log
 .DS_Store
 .local-chromium/
+senhaRemuneracao.json
+.wwebjs_cache
+.wwebjs_auth

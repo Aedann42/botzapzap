@@ -1,8 +1,12 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+// 📄 index.js
+
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
-const enviarRelatorios = require('./enviarRelatorios');
+const enviarRelatoriosImagem = require('./enviarRelatoriosImagem');
+const enviarRelatoriosPdf = require('./enviarRelatoriosPdf');
+const enviarRemuneracao = require('./enviarRemuneracao');
 
 const atendidosPath = path.join(__dirname, 'atendidos.json');
 let atendidos = fs.existsSync(atendidosPath)
@@ -24,7 +28,15 @@ client.on('ready', () => console.log('✅ Bot conectado!'));
 client.on('message', async message => {
   const numero = message.from;
 
-  if (numero.endsWith('@g.us')) return;
+  if (numero.endsWith('@g.us')) return; // Ignora grupos
+
+  const representantes = JSON.parse(fs.readFileSync('./representantes.json', 'utf8'));
+  const autorizado = representantes.some(rep => rep.telefone === numero.replace('@c.us', ''));
+
+  if (!autorizado) {
+    console.log(`Número não autorizado: ${numero}`);
+    return;
+  }
 
   if (!atendidos.includes(numero)) {
     const hora = new Date().getHours();
@@ -42,12 +54,18 @@ client.on('message', async message => {
       'O que mandas?',
       'Que bom receber seu contato.'
     ];
-
     const aleatoria = saudacoesAlternativas[Math.floor(Math.random() * saudacoesAlternativas.length)];
 
     await client.sendMessage(
       message.from,
-      `${saudacaoBase}! ${aleatoria}\n\nEscolha uma opção:\n1 - Sou RN e estou no Palm querendo relatórios (em caso de erro, só aguardar)\n2 - Preciso de ajuda do APR com outra coisa`
+      `${saudacaoBase}! ${aleatoria}
+
+Escolha uma opção:
+
+1 - Sou RN e estou no Palm querendo relatórios em PDF
+2 - Sou RN e estou no Palm querendo relatórios em imagens
+3 - Preciso de ajuda do APR
+4 - Desejo a planilha de remuneração, a senha será sua matrícula. Caso não lembre tem no crachá e na ultima planilha de remuneração que recebeu!`
     );
 
     atendidos.push(numero);
@@ -55,18 +73,51 @@ client.on('message', async message => {
     return;
   }
 
-  if (message.body.trim() === '1') {
-    await enviarRelatorios(client, message);
-  } else if (message.body.trim() === '2') {
-    try {
-      await client.sendMessage(
-        message.from,
-        'Certo, por favor aguarde um momento. Alguém da equipe APR irá te atender.'
-      );
-    } catch (err) {
-      console.error('Erro ao enviar mensagem de ajuda APR:', err);
-    }
+  const opcao = message.body.trim();
+
+  // Etapas em andamento
+  const etapasPath = path.join(__dirname, 'etapas.json');
+  const etapas = fs.existsSync(etapasPath)
+    ? JSON.parse(fs.readFileSync(etapasPath, 'utf8'))
+    : {};
+  
+  if (etapas[numero]) {
+    // Se o número já está numa etapa ativa, encaminha direto pro fluxo
+    await enviarRemuneracao(client, message);
+    return;
   }
+  
+  if (opcao === '1') {
+    await enviarRelatoriosPdf(client, message);
+  } else if (opcao === '2') {
+    await enviarRelatoriosImagem(client, message);
+  } else if (opcao === '3') {
+    await client.sendMessage(
+      message.from,
+      'Certo, por favor descreva a sua demanda sem se esquecer do NB e caso necessário encaminhe prints para maior agilidade no atendimento.'
+    );
+  } else if (opcao === '4') {
+    await enviarRemuneracao(client, message);
+  }
+  
 });
 
 client.initialize();
+
+client.on('disconnected', reason => {
+  console.error('⚠️ Cliente desconectado:', reason);
+  process.exit(1);
+});
+
+client.on('auth_failure', msg => {
+  console.error('❌ Falha na autenticação:', msg);
+  process.exit(1);
+});
+
+client.on('change_state', state => {
+  console.log('🔄 Estado do cliente mudou para:', state);
+});
+
+client.on('loading_screen', (percent, message) => {
+  console.log(`⏳ Carregando... ${percent}% - ${message}`);
+});
