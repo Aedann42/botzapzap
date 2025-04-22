@@ -55,17 +55,17 @@ client.on('message', async message => {
       'Que bom receber seu contato.'
     ];
     const aleatoria = saudacoesAlternativas[Math.floor(Math.random() * saudacoesAlternativas.length)];
+// RELATÓRIOS AINDA NÃO DISPONÍVEIS, AGUARDE INFORMAÇÃO DE QUE VOLTOU OU 30 MINUTOS E TENTE NOVAMENTE
 
-    await client.sendMessage(
+await client.sendMessage(
       message.from,
       `${saudacaoBase}! ${aleatoria}
-
-Escolha uma opção:
-
-1 - Sou RN e estou no Palm querendo relatórios em PDF
-2 - Sou RN e estou no Palm querendo relatórios em imagens
-3 - Preciso de ajuda do APR
-4 - Desejo a planilha de remuneração, a senha será sua matrícula. Caso não lembre tem no crachá e na ultima planilha de remuneração que recebeu!`
+      
+      Escolha uma opção: 
+1 - Quero meus relatórios em PDF
+2 - Quero meus relatórios em imagens
+3 - Preciso de ajuda do APR para demais assuntos
+4 - Quero minha planilha de remuneração (a senha é sua matrícula. Caso não lembre tem no crachá e na ultima planilha de remuneração que recebeu!`
     );
 
     atendidos.push(numero);
