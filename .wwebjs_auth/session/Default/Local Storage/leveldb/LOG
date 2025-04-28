@@ -1,21 +1,3 @@
-2025/04/17-08:05:11.453 3150 Reusing MANIFEST C:\botzapzap\botzapzap\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
-2025/04/17-08:05:11.453 3150 Recovering log #21
-2025/04/17-08:05:11.454 3150 Reusing old log C:\botzapzap\botzapzap\.wwebjs_auth\session\Default\Local Storage\leveldb/000021.log 
-2025/04/17-08:35:20.951 25a0 Level-0 table #25: started
-2025/04/17-08:35:20.954 25a0 Level-0 table #25: 13548 bytes OK
-2025/04/17-08:35:20.956 25a0 Delete type=0 #21
-2025/04/17-12:09:23.640 208c Level-0 table #27: started
-2025/04/17-12:09:23.644 208c Level-0 table #27: 13427 bytes OK
-2025/04/17-12:09:23.646 208c Delete type=0 #24
-2025/04/17-16:16:57.091 12c4 Level-0 table #29: started
-2025/04/17-16:16:57.095 12c4 Level-0 table #29: 12425 bytes OK
-2025/04/17-16:16:57.098 12c4 Delete type=0 #26
-2025/04/17-16:16:57.098 12c4 Compacting 4@0 + 1@1 files
-2025/04/17-16:16:57.111 12c4 Generated table #30@0: 140 keys, 3730 bytes
-2025/04/17-16:16:57.111 12c4 Compacted 4@0 + 1@1 files => 3730 bytes
-2025/04/17-16:16:57.112 12c4 compacted to: files[ 0 1 1 0 0 0 0 ]
-2025/04/17-16:16:57.113 12c4 Delete type=2 #19
-2025/04/17-16:16:57.113 12c4 Delete type=2 #22
-2025/04/17-16:16:57.113 12c4 Delete type=2 #25
-2025/04/17-16:16:57.113 12c4 Delete type=2 #27
-2025/04/17-16:16:57.113 12c4 Delete type=2 #29
+2025/04/28-12:06:01.003 41c Reusing MANIFEST C:\botzapzap\botzapzap\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
+2025/04/28-12:06:01.003 41c Recovering log #3
+2025/04/28-12:06:01.004 41c Reusing old log C:\botzapzap\botzapzap\.wwebjs_auth\session\Default\Local Storage\leveldb/000003.log 
