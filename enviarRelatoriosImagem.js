@@ -21,7 +21,7 @@ module.exports = async function enviarRelatorios(client, message) {
     console.log(`Número cadastrado: "${rep.telefone}"`);
   });
 
-  const pastaBase = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\4 - ABRIL\_GERADOR PDF\IMAGENS`;
+  const pastaBase = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\5 - MAIO\_GERADOR PDF\IMAGENS`;
   const pastaSetor = path.join(pastaBase, String(pessoa.setor));
   
 

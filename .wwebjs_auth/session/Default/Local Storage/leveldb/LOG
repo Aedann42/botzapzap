@@ -1,9 +1,2 @@
-2025/04/28-12:06:01.003 41c Reusing MANIFEST C:\botzapzap\botzapzap\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
-2025/04/28-12:06:01.003 41c Recovering log #3
-2025/04/28-12:06:01.004 41c Reusing old log C:\botzapzap\botzapzap\.wwebjs_auth\session\Default\Local Storage\leveldb/000003.log 
-2025/04/28-12:46:09.300 248 Level-0 table #5: started
-2025/04/28-12:46:09.303 248 Level-0 table #5: 16699 bytes OK
-2025/04/28-12:46:09.304 248 Delete type=0 #3
-2025/04/28-15:20:53.742 1570 Level-0 table #7: started
-2025/04/28-15:20:53.746 1570 Level-0 table #7: 12653 bytes OK
-2025/04/28-15:20:53.747 1570 Delete type=0 #4
+2025/05/06-07:56:44.234 2b4c Creating DB C:\botzapzap\botzapzap\.wwebjs_auth\session\Default\Local Storage\leveldb since it was missing.
+2025/05/06-07:56:44.299 2b4c Reusing MANIFEST C:\botzapzap\botzapzap\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001

@@ -1,3 +1,2 @@
-2025/04/28-12:06:01.007 3828 Reusing MANIFEST C:\botzapzap\botzapzap\.wwebjs_auth\session\Default\Service Worker\Database/MANIFEST-000001
-2025/04/28-12:06:01.007 3828 Recovering log #3
-2025/04/28-12:06:01.008 3828 Reusing old log C:\botzapzap\botzapzap\.wwebjs_auth\session\Default\Service Worker\Database/000003.log 
+2025/05/06-07:56:45.855 2b4c Creating DB C:\botzapzap\botzapzap\.wwebjs_auth\session\Default\Service Worker\Database since it was missing.
+2025/05/06-07:56:45.938 2b4c Reusing MANIFEST C:\botzapzap\botzapzap\.wwebjs_auth\session\Default\Service Worker\Database/MANIFEST-000001
