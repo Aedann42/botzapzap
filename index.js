@@ -1,5 +1,3 @@
-// 📄 index.js
-
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
@@ -7,6 +5,7 @@ const path = require('path');
 const enviarRelatoriosImagem = require('./enviarRelatoriosImagem');
 const enviarRelatoriosPdf = require('./enviarRelatoriosPdf');
 const enviarRemuneracao = require('./enviarRemuneracao');
+const enviarResumoPDV = require('./enviarResumoPDV'); // certifique-se que existe este módulo
 
 const atendidosPath = path.join(__dirname, 'atendidos.json');
 let atendidos = fs.existsSync(atendidosPath)
@@ -59,14 +58,15 @@ client.on('message', async message => {
     await client.sendMessage(
       message.from,
       `${saudacaoBase}! ${aleatoria}
-    
-    🌟 Escolha uma opção abaixo para que eu possa te ajudar: 🌟
-    
-    1️⃣ - Quero meus relatórios em PDF 📄✨  
-    2️⃣ - Quero meus relatórios em imagens 🖼️🎨  
-    3️⃣ - Preciso de ajuda do APR para demais assuntos 💬🤔  
-    4️⃣ - Quero minha planilha de remuneração 💼💰
-    `
+
+🌟 Escolha uma opção abaixo para que eu possa te ajudar: 🌟
+
+1️⃣ - Quero meus relatórios em PDF 📄✨  
+2️⃣ - Quero meus relatórios em imagens 🖼️🎨  
+3️⃣ - Preciso de ajuda do APR para demais assuntos 💬🤔  
+4️⃣ - Quero minha planilha de remuneração 💼💰  
+5️⃣ - Consultar tarefas do PDV 📋🔍
+`
     );
 
     atendidos.push(numero);
@@ -81,13 +81,21 @@ client.on('message', async message => {
   const etapas = fs.existsSync(etapasPath)
     ? JSON.parse(fs.readFileSync(etapasPath, 'utf8'))
     : {};
-  
+
   if (etapas[numero]) {
-    // Se o número já está numa etapa ativa, encaminha direto pro fluxo
-    await enviarRemuneracao(client, message);
-    return;
+    if (etapas[numero].etapa === 'pdv') {
+      // Se estiver na etapa PDV, chama o envio do resumo PDV
+      await enviarResumoPDV(client, message);
+      delete etapas[numero]; // limpa etapa após uso
+      fs.writeFileSync(etapasPath, JSON.stringify(etapas, null, 2));
+      return;
+    } else {
+      // Outras etapas podem ser adicionadas aqui, por enquanto só remuneracao
+      await enviarRemuneracao(client, message);
+      return;
+    }
   }
-  
+
   if (opcao === '1') {
     await enviarRelatoriosPdf(client, message);
   } else if (opcao === '2') {
@@ -99,8 +107,14 @@ client.on('message', async message => {
     );
   } else if (opcao === '4') {
     await enviarRemuneracao(client, message);
+  } else if (opcao === '5') {
+    await client.sendMessage(message.from, 'Por favor, envie o código do PDV que deseja consultar:');
+    etapas[numero] = { etapa: 'pdv' };
+    fs.writeFileSync(etapasPath, JSON.stringify(etapas, null, 2));
+    return;
+  } else {
+    await client.sendMessage(message.from, 'Opção inválida. Por favor, escolha uma opção válida do menu.');
   }
-  
 });
 
 client.initialize();

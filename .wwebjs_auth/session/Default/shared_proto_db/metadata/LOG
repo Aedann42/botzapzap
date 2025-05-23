@@ -1,2 +1,3 @@
-2025/05/06-08:02:14.120 2650 Creating DB C:\botzapzap\botzapzap\.wwebjs_auth\session\Default\shared_proto_db\metadata since it was missing.
-2025/05/06-08:02:14.228 2650 Reusing MANIFEST C:\botzapzap\botzapzap\.wwebjs_auth\session\Default\shared_proto_db\metadata/MANIFEST-000001
+2025/05/23-08:37:44.478 730 Reusing MANIFEST C:\botzapzap\botzapzap\.wwebjs_auth\session\Default\shared_proto_db\metadata/MANIFEST-000001
+2025/05/23-08:37:44.485 730 Recovering log #3
+2025/05/23-08:37:44.486 730 Reusing old log C:\botzapzap\botzapzap\.wwebjs_auth\session\Default\shared_proto_db\metadata/000003.log 
