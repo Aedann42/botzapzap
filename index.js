@@ -108,12 +108,11 @@ client.on('message', async message => {
   } else if (opcao === '4') {
     await enviarRemuneracao(client, message);
   } else if (opcao === '5') {
-    await client.sendMessage(message.from, 'Por favor, envie o código do PDV que deseja consultar:');
+    await client.sendMessage(message.from, 'Por favor, envie o código do PDV que deseja consultar as tarefas!');
     etapas[numero] = { etapa: 'pdv' };
     fs.writeFileSync(etapasPath, JSON.stringify(etapas, null, 2));
     return;
   } else {
-    await client.sendMessage(message.from, 'Opção inválida. Por favor, escolha uma opção válida do menu.');
   }
 });
 
