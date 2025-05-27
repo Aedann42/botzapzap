@@ -38,7 +38,7 @@ async function enviarRemuneracao(client, message) {
   if (!etapas[numero]) {
     etapas[numero] = { etapa: 'matricula' };
     console.log(`Etapa inicial: matrícula solicitada para ${numero}`);
-    await client.sendMessage(numero, 'Por favor, informe sua *matrícula* para continuar:');
+    await client.sendMessage(numero, 'Por favor, informe sua *matrícula* para continuar, lembrando que só pode ter os numeros na proxima mensagem!');
     salvarEtapas(etapas);
     return;
   }
