@@ -63,7 +63,14 @@ client.on('message', async message => { //
 
     await client.sendMessage( //
       message.from, //
-      `${saudacaoBase}! ${aleatoria}\n\n🌟 Escolha uma opção abaixo para que eu possa te ajudar: 🌟\n\n1️⃣ - Quero meus relatórios em PDF 📄✨\n2️⃣ - Quero meus relatórios em imagens 🖼️🎨\n3️⃣ - Preciso de ajuda do APR para demais assuntos 💬🤔\n4️⃣ - Quero minha planilha de remuneração 💼💰\n5️⃣ - Consultar tarefas do PDV 📋🔍` //
+      `${saudacaoBase}! ${aleatoria}
+      \n🌟 Escolha uma opção abaixo para que eu possa te ajudar: 🌟\n
+      \n1️⃣ - Quero meus relatórios em PDF 📄✨
+      \n2️⃣ - Quero meus relatórios em imagens 🖼️🎨
+      \n3️⃣ - Preciso de ajuda do APR para demais assuntos 💬🤔
+      \n4️⃣ - Quero minha planilha de remuneração 💼💰
+      \n5️⃣ - Consultar tarefas do PDV 📋🔍 
+      \n PS: Segunda-feira eu e o bot estaremos de férias, procure seu GV para mais informações` //
     );
 
     atendidos.push(numero); //

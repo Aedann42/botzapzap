@@ -62,7 +62,7 @@ module.exports = async (client, message) => {
     console.log('🔍 Código PDV recebido do usuário:', codigoPDV);
 
     const arquivo = path.join(
-        '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\5 - MAIO',
+        '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\5 - MAIO\\_GERADOR PDF\\',
         'Acomp Tarefas do Dia.xlsx'
     );
     console.log('📄 Caminho do arquivo:', arquivo);
