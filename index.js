@@ -2,14 +2,10 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js'); //
 const qrcode = require('qrcode-terminal'); //
 const fs = require('fs'); //
 const path = require('path'); //
-
-// Importe os novos módulos (já existentes no seu código original)
-const enviarRelatoriosImagem = require('./enviarRelatoriosImagem'); //
-const enviarRelatoriosPdf = require('./enviarRelatoriosPdf'); //
-const enviarRemuneracao = require('./enviarRemuneracao'); //
-const enviarResumoPDV = require('./enviarResumoPDV'); // O módulo que acabamos de ajustar
-
-
+const enviarRelatoriosImagem = require('./enviarRelatoriosImagem'); //Envia as imagens convertidas de PDF's para PNG
+const enviarRelatoriosPdf = require('./enviarRelatoriosPdf'); //Envia os PDF's
+const enviarRemuneracao = require('./enviarRemuneracao'); //Envia o PDF de remuneração, pede a matrícula do RN antes
+const enviarResumoPDV = require('./enviarResumoPDV'); //Envia lista de TAREFAS por NB com resumo antes
 const atendidosPath = path.join(__dirname, 'atendidos.json'); //
 let atendidos = fs.existsSync(atendidosPath) //
   ? JSON.parse(fs.readFileSync(atendidosPath, 'utf8')) //
@@ -33,7 +29,6 @@ client.on('message', async message => { //
   if (numero.endsWith('@g.us')) return; // Ignora grupos
 
   // A parte de 'representantes.json' e 'autorizado' é importante para a segurança.
-  // Vou manter o código como você o forneceu no início para garantir a compatibilidade.
   const representantes = JSON.parse(fs.readFileSync('./representantes.json', 'utf8')); //
   const autorizado = representantes.some(rep => rep.telefone === numero.replace('@c.us', '')); //
 
@@ -69,8 +64,7 @@ client.on('message', async message => { //
       \n2️⃣ - Quero meus relatórios em imagens 🖼️🎨
       \n3️⃣ - Preciso de ajuda do APR para demais assuntos 💬🤔
       \n4️⃣ - Quero minha planilha de remuneração 💼💰
-      \n5️⃣ - Consultar tarefas do PDV 📋🔍 
-      \n PS: Segunda-feira eu e o bot estaremos de férias, procure seu GV para mais informações` //
+      \n5️⃣ - Consultar tarefas do PDV 📋🔍 ` //
     );
 
     atendidos.push(numero); //
@@ -80,7 +74,7 @@ client.on('message', async message => { //
 
   const opcao = message.body.trim(); //
 
-  // Etapas em andamento (para gerenciar fluxos de conversação)
+  // Etapas de andamento (para gerenciar fluxos de conversação)
   const etapasPath = path.join(__dirname, 'etapas.json'); //
   const etapas = fs.existsSync(etapasPath) //
     ? JSON.parse(fs.readFileSync(etapasPath, 'utf8')) //
@@ -122,7 +116,6 @@ client.on('message', async message => { //
     return; //
   } else {
     // Caso o usuário digite algo que não é uma opção válida após a primeira saudação
-    // Você pode adicionar uma mensagem de "opção inválida" aqui se desejar
   }
 });
 

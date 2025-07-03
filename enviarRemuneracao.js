@@ -76,7 +76,7 @@ async function enviarRemuneracao(client, message) {
     }
 
     const arquivoPath = path.join(
-      '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\5 - MAIO\\_GERADOR PDF\\REMUNERACAO',
+      '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\7 - JULHO\\_GERADOR PDF\\REMUNERACAO',
       setor,
       `${setor}.pdf`
     );

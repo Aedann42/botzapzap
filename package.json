@@ -12,10 +12,10 @@
   "dependencies": {
     "exceljs": "^4.4.0",
     "mime-types": "^3.0.1",
-    "puppeteer": "^24.6.1",
+    "puppeteer": "^24.11.2",
     "puppeteer-core": "^24.6.1",
     "qrcode-terminal": "^0.12.0",
-    "whatsapp-web.js": "^1.27.0",
+    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js",
     "xlsx": "^0.18.5"
   }
 }

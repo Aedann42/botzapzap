@@ -62,7 +62,7 @@ module.exports = async (client, message) => {
     console.log('🔍 Código PDV recebido do usuário:', codigoPDV);
 
     const arquivo = path.join(
-        '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\5 - MAIO\\_GERADOR PDF\\',
+        '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\7 - JULHO\\_GERADOR PDF\\',
         'Acomp Tarefas do Dia.xlsx'
     );
     console.log('📄 Caminho do arquivo:', arquivo);
@@ -109,7 +109,7 @@ module.exports = async (client, message) => {
                     if (rowNumber === 1) return;
                     totalLinhas++;
 
-                    const pdvPlanilha = normalize(getCellValueAsString(row.getCell(5)));
+                    const pdvPlanilha = normalize(getCellValueAsString(row.getCell(6)));
 
                     if (pdvPlanilha === codigoPDV) {
                         correspondencias++;
@@ -122,15 +122,15 @@ module.exports = async (client, message) => {
                             dataCriacao = excelSerialToDate(dataCriacaoValor);
                         }
 
-                        const tarefa = getCellValueAsString(row.getCell(18)) || '-';
-                        const razao = getCellValueAsString(row.getCell(6)) || '-';
-                        const setor = getCellValueAsString(row.getCell(8)) || '-';
-                        const completa = row.getCell(19).value === 1 ? '✅ Sim' : '❌ Não';
-                        const validada = row.getCell(20).value === 1 ? '✅ Sim' : '❌ Não';
-                        const categoria = getCellValueAsString(row.getCell(25)) || '-';
+                        const tarefa = getCellValueAsString(row.getCell(19)) || '-';
+                        const razao = getCellValueAsString(row.getCell(7)) || '-';
+                        const setor = getCellValueAsString(row.getCell(9)) || '-';
+                        const completa = row.getCell(20).value === 1 ? '✅ Sim' : '❌ Não';
+                        const validada = row.getCell(21).value === 1 ? '✅ Sim' : '❌ Não';
+                        const categoria = getCellValueAsString(row.getCell(26)) || '-';
 
-                        if (row.getCell(19).value === 1) totalCompletas++;
-                        if (row.getCell(20).value === 1) totalValidadas++;
+                        if (row.getCell(20).value === 1) totalCompletas++;
+                        if (row.getCell(21).value === 1) totalValidadas++;
 
                         linhas.push(
                             `🗓️ *Data Criação:* ${dataCriacao}\n` +
