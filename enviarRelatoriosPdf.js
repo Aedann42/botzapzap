@@ -60,7 +60,7 @@ module.exports = async function enviarRelatoriosPdf(client, message) {
         return;
     }
 
-    const pastaBase = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\5 - MAIO\_GERADOR PDF\ACOMPS`;
+    const pastaBase = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\7 - JULHO\_GERADOR PDF\ACOMPS`;
     const pastaSetor = path.join(pastaBase, String(pessoa.setor));
 
     if (!fs.existsSync(pastaSetor)) {

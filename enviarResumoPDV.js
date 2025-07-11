@@ -1,21 +1,11 @@
 // enviarResumoPDV.js
 const ExcelJS = require('exceljs');
 const path = require('path');
-const fs = require('fs');
 
 // --- Funções Auxiliares ---
 function excelSerialToDate(serial) {
     const excelEpoch = new Date(1899, 11, 30);
     return new Date(excelEpoch.getTime() + serial * 86400000).toLocaleDateString('pt-BR');
-}
-
-function normalize(text) {
-    return String(text)
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/\s+/g, '')
-        .toUpperCase()
-        .trim();
 }
 
 function getCellValueAsString(cell) {
@@ -33,8 +23,7 @@ function gerarBarraProgresso(percentual) {
 }
 // --- Fim das Funções Auxiliares ---
 
-
-// --- Variáveis para Gerenciamento da Fila ---
+// --- Fila de requisições ---
 let isProcessingExcel = false;
 const excelRequestQueue = [];
 
@@ -56,20 +45,19 @@ async function processNextExcelRequest() {
     }
 }
 
-// --- Lógica Principal do Módulo de Consulta de PDV ---
+// --- Módulo principal ---
 module.exports = async (client, message) => {
-    const codigoPDV = normalize(message.body);
-    console.log('🔍 Código PDV recebido do usuário:', codigoPDV);
+    const codigoPDV = message.body.trim(); // <- mantém como string limpa
+    console.log('🔍 Código NB recebido do usuário:', codigoPDV);
 
     const arquivo = path.join(
         '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\7 - JULHO\\_GERADOR PDF\\',
         'Acomp Tarefas do Dia.xlsx'
     );
-    console.log('📄 Caminho do arquivo:', arquivo);
 
     await client.sendMessage(
         message.from,
-        `⏳ Favor aguardar, verificando em sistema as tarefas para o PDV ${codigoPDV}.\nIsso pode levar alguns minutos...`
+        `⏳ Buscando tarefas do NB ${codigoPDV}, aguarde um momento...`
     );
 
     return new Promise(async (resolve, reject) => {
@@ -79,40 +67,40 @@ module.exports = async (client, message) => {
                 await workbook.xlsx.readFile(arquivo);
                 console.log('✅ Planilha carregada com sucesso.');
 
-                // --- TRECHO DE DEPURACAO TEMPORARIO: LISTA OS NOMES DAS ABAS ---
+                // Log das abas
                 console.log('🔍 Nomes das abas encontradas no arquivo Excel:');
                 workbook.eachSheet((sheet, sheetId) => {
                     console.log(`- Aba ${sheetId}: "${sheet.name}"`);
                 });
-                console.log('------------------------------------------------');
-                // --- FIM DO TRECHO DE DEPURACAO TEMPORARIO ---
 
-                // ATENÇÃO: Verifique o console do bot e use o nome EXATO que aparecer no log
-                // Se o log mostrar "BI - BEES Force Tasks ", com um espaço no final, use-o assim.
-                const aba = workbook.getWorksheet('BI - BEES Force Tasks'); // Use o nome que você confirmou ou o que aparecer no log
-
+                const aba = workbook.getWorksheet('BI - BEES Force Tasks');
                 if (!aba) {
                     console.error('❌ Aba "BI - BEES Force Tasks" não encontrada.');
-                    await client.sendMessage(message.from, '❌ Aba de tarefas não encontrada. Avise o APR.');
+                    await client.sendMessage(message.from, '❌ Não foi possível encontrar a aba de tarefas. Avise o APR.');
                     resolve();
                     return;
                 }
-                console.log('📊 Aba encontrada: BI - BEES Force Tasks');
 
                 let linhas = [];
                 let totalLinhas = 0;
                 let correspondencias = 0;
                 let totalCompletas = 0;
                 let totalValidadas = 0;
+                let revenda = '';
 
                 aba.eachRow((row, rowNumber) => {
                     if (rowNumber === 1) return;
                     totalLinhas++;
 
-                    const pdvPlanilha = normalize(getCellValueAsString(row.getCell(6)));
+                    const nbPlanilha = String(row.getCell(5).value).trim(); // <- pega diretamente o valor do NB
+                    const codigo = String(codigoPDV).trim();
 
-                    if (pdvPlanilha === codigoPDV) {
+                    if (nbPlanilha === codigo) {
                         correspondencias++;
+
+                        if (!revenda) {
+                            revenda = getCellValueAsString(row.getCell(4));
+                        }
 
                         const dataCriacaoValor = row.getCell(1).value;
                         let dataCriacao = 'Data inválida';
@@ -123,8 +111,6 @@ module.exports = async (client, message) => {
                         }
 
                         const tarefa = getCellValueAsString(row.getCell(19)) || '-';
-                        const razao = getCellValueAsString(row.getCell(7)) || '-';
-                        const setor = getCellValueAsString(row.getCell(9)) || '-';
                         const completa = row.getCell(20).value === 1 ? '✅ Sim' : '❌ Não';
                         const validada = row.getCell(21).value === 1 ? '✅ Sim' : '❌ Não';
                         const categoria = getCellValueAsString(row.getCell(26)) || '-';
@@ -134,8 +120,6 @@ module.exports = async (client, message) => {
 
                         linhas.push(
                             `🗓️ *Data Criação:* ${dataCriacao}\n` +
-                            `🏬 *Razão Social:* ${razao}\n` +
-                            `📍 *Setor:* ${setor}\n` +
                             `📝 *Tarefa:* ${tarefa}\n` +
                             `✅ *Completa:* ${completa}\n` +
                             `🔎 *Validada:* ${validada}\n` +
@@ -144,26 +128,27 @@ module.exports = async (client, message) => {
                     }
                 });
 
-                console.log(`🔍 Total de linhas verificadas: ${totalLinhas}`);
-                console.log(`✅ Total de correspondências com o PDV: ${correspondencias}`);
-
-                const percentualValidadas = correspondencias > 0 ? Math.round((totalValidadas / correspondencias) * 100) : 0;
+                const percentualValidadas = correspondencias > 0
+                    ? Math.round((totalValidadas / correspondencias) * 100)
+                    : 0;
                 const barra = gerarBarraProgresso(percentualValidadas);
 
                 const resposta = correspondencias > 0
-                    ? `📊 *Resumo das Tarefas para o PDV ${codigoPDV}:*\n` +
+                    ? `📊 *Resumo das Tarefas para o NB ${codigoPDV}:*\n` +
+                      `🏬 *Código da revenda:* ${revenda}\n` +
+                      `Em caso de divergencia no cod da revenda averiguar com o APR, pode ser que a revenda seja outra \n`+
                       `• Total de tarefas: ${correspondencias}\n` +
                       `• Completas: ${totalCompletas}\n` +
                       `• Validadas: ${totalValidadas}\n` +
                       `• Validação: ${percentualValidadas}% ${barra}\n\n` +
                       `📋 *Detalhes das tarefas:*\n\n${linhas.join('\n\n')}`
-                    : `⚠️ Nenhuma tarefa encontrada para o PDV ${codigoPDV}.\n\nVerifique se o código está correto.`;
+                    : `⚠️ Nenhuma tarefa encontrada para o NB ${codigoPDV}. Verifique se o código está correto.`;
 
                 await client.sendMessage(message.from, resposta);
                 resolve();
             } catch (err) {
-                console.error('❌ Erro ao ler tarefas do PDV:', err);
-                await client.sendMessage(message.from, '❌ Erro ao consultar tarefas. Verifique o NB ou entre em contato com o APR.');
+                console.error('❌ Erro ao consultar tarefas:', err);
+                await client.sendMessage(message.from, '❌ Erro ao consultar tarefas. Avise o APR.');
                 reject(err);
             }
         };
