@@ -3,6 +3,9 @@ const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
 
+// Importação do texto do menu
+const MENU_TEXT = require('./menuOptions');
+
 // Importações dos módulos de funcionalidade
 const enviarRelatoriosImagem = require('./enviarRelatoriosImagem');
 const enviarRelatoriosPdf = require('./enviarRelatoriosPdf');
@@ -23,7 +26,6 @@ function lerJson(filePath, defaultValue = {}) {
         }
     } catch (error) {
         console.error(`Erro ao ler o arquivo JSON ${filePath}:`, error);
-        // Opcional: recriar arquivo com valor padrão se houver erro de parsing
         fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2));
     }
     return defaultValue;
@@ -56,7 +58,6 @@ client.on('message', async message => {
 
     if (!autorizado) {
         console.log(`Número não autorizado: ${numero}`);
-        // Não envia mensagem para números não autorizados por segurança
         return;
     }
 
@@ -73,25 +74,14 @@ client.on('message', async message => {
         ];
         const saudacaoAleatoria = saudacoesAlternativas[Math.floor(Math.random() * saudacoesAlternativas.length)];
 
-        const menuOpcoes = `
-🌟 Escolha uma opção abaixo para que eu possa te ajudar: 🌟
-
-1️⃣ - Quero meus relatórios em PDF 📄✨
-2️⃣ - Quero meus relatórios em imagens 🖼️🎨
-3️⃣ - Preciso de ajuda do APR para demais assuntos 💬🤔
-4️⃣ - Quero minha planilha de remuneração 💼💰
-5️⃣ - Consultar tarefas do PDV 📋🔍
-6️⃣ - Consultar a lista de telefones úteis Tarumã 😶‍🌫️
-`;
-
         await client.sendMessage(
             message.from,
-            `${saudacaoBase}! ${saudacaoAleatoria}\n${menuOpcoes}`
+            `${saudacaoBase}! ${saudacaoAleatoria}\n${MENU_TEXT}` // Usa MENU_TEXT importado
         );
 
         atendidos.push(numero);
         fs.writeFileSync(ATENDIDOS_PATH, JSON.stringify(atendidos, null, 2));
-        return; // Sai da função para aguardar a próxima mensagem do usuário
+        return;
     }
 
     const opcao = message.body.trim();
@@ -99,45 +89,40 @@ client.on('message', async message => {
     let etapas = lerJson(ETAPAS_PATH, {});
 
     // --- Gerenciamento de Etapas Ativas (Fluxos de Conversação) ---
-    // Verifica se o usuário está em um fluxo específico (ex: aguardando matrícula, código PDV)
     if (etapas[numero] && etapas[numero].etapa) {
         const etapaAtual = etapas[numero].etapa;
 
         try {
             if (etapaAtual === 'pdv') {
                 await enviarResumoPDV(client, message);
-                delete etapas[numero]; // Finaliza a etapa após o envio/processamento
+                delete etapas[numero];
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
                 return;
             }
 
             if (etapaAtual === 'remuneracao') {
-                // enviarRemuneracao lida com a lógica de pedir matrícula e enviar o PDF.
-                // Ela mesma se encarrega de deletar a etapa após a conclusão ou erro.
                 await enviarRemuneracao(client, message);
                 return;
             }
 
-            if (etapaAtual === 'aguardandoEscolha') { // Exemplo de outra etapa
+            if (etapaAtual === 'aguardandoEscolha') {
                 await enviarListaContatos(client, message);
-                delete etapas[numero]; // Finaliza a etapa
-                fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
                 return;
             }
         } catch (error) {
             console.error(`Erro ao processar etapa "${etapaAtual}" para ${numero}:`, error);
             await client.sendMessage(numero, '❌ Ocorreu um erro ao processar sua solicitação. Por favor, tente novamente.');
-            delete etapas[numero]; // Limpa a etapa em caso de erro para evitar travamento
+            delete etapas[numero];
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             return;
         }
     }
 
     // --- Gerenciamento das Opções do Menu Principal (quando não há etapa ativa) ---
-    switch (opcao.toLowerCase()) { // Converte para minúsculas para aceitar "Menu", "menu", etc.
+    switch (opcao.toLowerCase()) {
         case '1':
             await enviarRelatoriosPdf(client, message);
-            if (etapas[numero]) delete etapas[numero].tentativasInvalidas; // Reseta contador de erros
+            if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
         case '2':
             await enviarRelatoriosImagem(client, message);
@@ -151,14 +136,12 @@ client.on('message', async message => {
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
         case '4':
-            // Define a etapa para 'remuneracao' e pede a matrícula
             etapas[numero] = { etapa: 'remuneracao' };
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             await client.sendMessage(message.from, 'Por favor, informe sua *matrícula* para continuar, lembrando que só pode ter os números na próxima mensagem!');
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
         case '5':
-            // Define a etapa para 'pdv' e pede o código
             await client.sendMessage(message.from, 'Por favor, envie o código do PDV que deseja consultar as tarefas!');
             etapas[numero] = { etapa: 'pdv' };
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
@@ -168,7 +151,7 @@ client.on('message', async message => {
             await enviarListaContatos(client, message);
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
-        case 'menu': // Permite ao usuário solicitar o menu novamente
+        case 'menu':
             const hora = new Date().getHours();
             const saudacaoBase = hora <= 12 ? 'Bom dia' : 'Boa tarde';
             const saudacoesAlternativas = [
@@ -179,39 +162,18 @@ client.on('message', async message => {
             ];
             const saudacaoAleatoria = saudacoesAlternativas[Math.floor(Math.random() * saudacoesAlternativas.length)];
 
-            const menuOpcoes = `
-🌟 Escolha uma opção abaixo para que eu possa te ajudar: 🌟
-
-1️⃣ - Quero meus relatórios em PDF 📄✨
-2️⃣ - Quero meus relatórios em imagens 🖼️🎨
-3️⃣ - Preciso de ajuda do APR para demais assuntos 💬🤔
-4️⃣ - Quero minha planilha de remuneração 💼💰
-5️⃣ - Consultar tarefas do PDV 📋🔍
-6️⃣ - Consultar a lista de telefones úteis Tarumã 😶‍🌫️
-
-Digite MENU a qualquer momento para receber novamente essa mensagem`;
             await client.sendMessage(
                 message.from,
-                `${saudacaoBase}! ${saudacaoAleatoria}\n${menuOpcoes}`
+                `${saudacaoBase}! ${saudacaoAleatoria}\n${MENU_TEXT}` // Usa MENU_TEXT importado
             );
-            if (etapas[numero]) delete etapas[numero].tentativasInvalidas; // Reseta após mostrar o menu
+            if (etapas[numero]) {
+                delete etapas[numero].tentativasInvalidas;
+                fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+            }
             break;
         default:
-    // Garante que o objeto de etapas para o número exista
-    if (!etapas[numero]) {
-        etapas[numero] = {};
-    }
-
-    // Se o usuário está fora de uma etapa ativa, mandamos apenas UMA VEZ a mensagem de "menu"
-    if (!etapas[numero].menuAvisado) {
-        await client.sendMessage(message.from, '❓ Não entendi. Digite *menu* para ver as opções.');
-        etapas[numero].menuAvisado = true;
-        fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-    } else {
-        console.log(`Ignorando repetição de aviso "menu" para ${numero}`);
-    }
-    break;
-
+            await client.sendMessage(message.from, '❓ Não entendi. Digite *menu* para ver as opções.');
+            break;
     }
 });
 
@@ -221,12 +183,12 @@ client.initialize();
 // --- Eventos de Estado do Cliente (para monitoramento) ---
 client.on('disconnected', reason => {
     console.error('⚠️ Cliente desconectado:', reason);
-    process.exit(1); // Encerra o processo em caso de desconexão grave
+    process.exit(1);
 });
 
 client.on('auth_failure', msg => {
     console.error('❌ Falha na autenticação:', msg);
-    process.exit(1); // Encerra o processo em caso de falha de autenticação
+    process.exit(1);
 });
 
 client.on('change_state', state => {
