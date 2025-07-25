@@ -89,6 +89,7 @@ async function enviarListaContatos(client, message) {
     }
 
     // Limpa etapa após envio
+    await client.sendSeen(numero); // <- MARCA COMO LIDA
     delete etapas[numero];
     salvarEtapas(etapas);
   }

@@ -14,6 +14,14 @@ async function processNextPdfReportSendRequest() {
         return;
     }
 
+    async function processNextPdfReportSendRequest(client, numero, arquivoPdf) {
+    await client.sendSeen(numero); // ✅ Agora sim, numero vem como parâmetro
+
+    const media = MessageMedia.fromFilePath(arquivoPdf);
+    await client.sendMessage(numero, media);
+}
+
+
     const nextRequest = pdfReportSendQueue.shift(); // Pega a primeira requisição da fila
     isSendingPdfReports = true; // Marca que estamos processando
 
@@ -45,6 +53,7 @@ async function processNextPdfReportSendRequest() {
         await client.sendMessage(message.from, '❌ Ocorreu um erro ao enviar os relatórios PDF. Tente novamente mais tarde.');
     } finally {
         // Quando a requisição atual termina, chama a próxima na fila
+    
         processNextPdfReportSendRequest();
     }
 }

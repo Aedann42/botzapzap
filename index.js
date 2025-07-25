@@ -166,13 +166,11 @@ client.on('message', async message => {
                 message.from,
                 `${saudacaoBase}! ${saudacaoAleatoria}\n${MENU_TEXT}` // Usa MENU_TEXT importado
             );
+            await client.sendSeen(numero); // <- MARCA COMO LIDA
             if (etapas[numero]) {
                 delete etapas[numero].tentativasInvalidas;
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             }
-            break;
-        default:
-            await client.sendMessage(message.from, '❓ Não entendi. Digite *menu* para ver as opções.');
             break;
     }
 });

@@ -105,7 +105,7 @@ async function enviarRemuneracao(client, message) {
         );
 
         if (!credencialValida) {
-            await client.sendMessage(numero, '❌ Matrícula incorreta para o seu setor. Por favor, tente novamente ou digite "cancelar".');
+            await client.sendMessage(numero, '❌ Matrícula incorreta para o seu setor. Por favor, tente novamente digitando a opção 4 ou digite "cancelar".');
             // Não exclui a etapa para permitir nova tentativa
             return;
         }
@@ -135,6 +135,7 @@ async function enviarRemuneracao(client, message) {
         });
 
         await client.sendMessage(numero, '✅ Sua planilha foi enviada com sucesso!');
+        await client.sendSeen(numero); // <- MARCA COMO LIDA
         console.log("✅ Arquivo de remuneração enviado com sucesso.");
 
     } catch (err) {

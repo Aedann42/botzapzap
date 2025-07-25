@@ -110,10 +110,10 @@ module.exports = async (client, message) => {
                             dataCriacao = excelSerialToDate(dataCriacaoValor);
                         }
 
-                        const tarefa = getCellValueAsString(row.getCell(19)) || '-';
-                        const completa = row.getCell(20).value === 1 ? '✅ Sim' : '❌ Não';
-                        const validada = row.getCell(21).value === 1 ? '✅ Sim' : '❌ Não';
-                        const categoria = getCellValueAsString(row.getCell(26)) || '-';
+                        const tarefa = getCellValueAsString(row.getCell(17)) || '-';
+                        const completa = row.getCell(18).value === 1 ? '✅ Sim' : '❌ Não';
+                        const validada = row.getCell(19).value === 1 ? '✅ Sim' : '❌ Não';
+                        const categoria = getCellValueAsString(row.getCell(9)) || '-';
 
                         if (row.getCell(20).value === 1) totalCompletas++;
                         if (row.getCell(21).value === 1) totalValidadas++;

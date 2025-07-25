@@ -1,3 +1,4 @@
+// menuOptions.js
 const MENU_TEXT = `
 🌟 Escolha uma opção abaixo para que eu possa te ajudar: 🌟
 
