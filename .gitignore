@@ -1,10 +1,17 @@
 node_modules/
 .env
-representantes.json
 *.log
 .DS_Store
 .local-chromium/
-senhaRemuneracao.json
 .wwebjs_cache
 .wwebjs_auth
+
+# Dados da revenda
 contatos.json
+atendidos.json
+representantes.json
+senhaRemuneracao.json
+/logs
+
+# Pasta de sessão do WhatsApp
+/.session
