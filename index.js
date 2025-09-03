@@ -1,8 +1,12 @@
+// --- Importações Originais ---
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
-const verificarAtualizacaoDiaria = require('./src/services/checkDateReports.js');
+const verificarArquivoAtualizado = require('./src/services/checkDateReports.js');
+const { lerJson, registrarUso, REPRESENTANTES_PATH, ETAPAS_PATH, ATENDIDOS_PATH } = require('./src/utils/dataHandler.js');
+const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\9 - SETEMBRO\\_GERADOR PDF\\ACOMPS\\GV4\\MATINAL_GV4.pdf';
+const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\9 - SETEMBRO\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_3.jpg'
 
 // Importação do texto do menu
 const MENU_TEXT = require('./src/config/menuOptions');
@@ -14,58 +18,12 @@ const enviarRemuneracao = require('./src/handlers/enviarRemuneracao');
 const enviarResumoPDV = require('./src/handlers/enviarResumoPDV');
 const enviarListaContatos = require('./src/handlers/enviarListaContatos');
 
-// Caminhos dos arquivos
-const ATENDIDOS_PATH = path.join(__dirname, 'data', 'atendidos.json');
-const REPRESENTANTES_PATH = path.join(__dirname, 'data', 'representantes.json'); 
-const ETAPAS_PATH = path.join(__dirname, 'data', 'etapas.json'); 
-const LOG_USO_PATH = path.join(__dirname, 'logs', 'log_uso.json');
-
-// Função auxiliar para leitura de JSON
-function lerJson(filePath, defaultValue = {}) {
-    try {
-        if (fs.existsSync(filePath)) {
-            return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-        }
-    } catch (error) {
-        console.error(`Erro ao ler o arquivo JSON ${filePath}:`, error);
-        fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2));
-    }
-    return defaultValue;
-}
-
-// Função para registrar o uso das funcionalidades
-async function registrarUso(numero, nomeFuncao) {
-    try {
-        const representantes = lerJson(REPRESENTANTES_PATH, []);
-        const logUso = lerJson(LOG_USO_PATH, []);
-
-        const numeroLimpo = numero.replace('@c.us', '');
-        const representante = representantes.find(rep => rep.telefone === numeroLimpo);
-        
-        const setor = representante.setor;
-
-        const timestamp = new Date();
-        const novoRegistro = {
-            timestamp: timestamp.toISOString(),
-            data: timestamp.toISOString().split('T')[0], // Formato YYYY-MM-DD
-            setor: setor,
-            funcao: nomeFuncao
-        };
-
-        logUso.push(novoRegistro);
-        fs.writeFileSync(LOG_USO_PATH, JSON.stringify(logUso, null, 2));
-        console.log(`[LOG] Ação registrada: Setor ${setor} | ${nomeFuncao}`);
-    } catch (error) {
-        console.error('Erro ao registrar o uso:', error);
-    }
-}
-
 let atendidos = lerJson(ATENDIDOS_PATH, []);
 
 // Inicialização do cliente WhatsApp
 const client = new Client({
     authStrategy: new LocalAuth({
-        dataPath: '.session' // <-- NOVO: Especifica a pasta para os dados da sessão
+        dataPath: '.session'
     }),
     puppeteer: {
         headless: true,
@@ -74,7 +32,14 @@ const client = new Client({
 });
 
 client.on('qr', qr => qrcode.generate(qr, { small: true }));
-client.on('ready', () => console.log('✅ Bot conectado!'));
+
+// --- ALTERAÇÃO: A chamada para a funcionalidade de água agora é uma única linha ---
+client.on('ready', () => {
+    console.log('✅ Bot conectado!');
+    
+    // Inicia o ciclo de lembretes de água, passando o 'client' para o módulo separado
+    //iniciarLembretesDeAgua(client);
+});
 
 // Marcar mensagens de grupos como lidas (sem menção)
 client.on('message', async msg => {
@@ -155,43 +120,33 @@ client.on('message', async message => {
         }
     }
 
-    const MENSAGEM_RELATORIOS_INDISPONIVEIS = '⚠️ Relatórios ainda não gerados por problemas técnicos. Por favor, aguarde que será avisado no grupo da sua equipe quando tiver disponível. 🤖';
+    const MENSAGEM_RELATORIOS_INDISPONIVEIS = '⚠️ Relatórios ainda não gerados por favor, aguarde que será avisadoquando estiver disponível. 🤖';
 
    switch (opcao.toLowerCase()) {
-        case '1': { // Adicionamos chaves para criar um bloco de código
-            // NOVO: Chamamos a função de verificação primeiro
-            const relatoriosProntos = await verificarAtualizacaoDiaria();
+        case '1': { 
+            await client.sendSeen(numero);
 
-            // NOVO: Verificamos a resposta da função
+            const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
             if (relatoriosProntos) {
-                // Se a resposta for TRUE, fazemos o que já era feito antes
                 await enviarRelatoriosPdf(client, message);
                 await registrarUso(numero, 'Relatórios em PDF');
                 if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
-                await client.sendSeen(numero);
+
             } else {
-                // Se a resposta for FALSE, enviamos a mensagem de aviso
                 await client.sendMessage(message.from, MENSAGEM_RELATORIOS_INDISPONIVEIS);
-                await client.sendSeen(numero);
             }
             break;
         }
 
-        case '2': { // Adicionamos chaves aqui também
-            // NOVO: Chamamos a função de verificação novamente
-            const relatoriosProntos = await verificarAtualizacaoDiaria();
-
-            // NOVO: Verificamos a resposta
+        case '2': {
+            await client.sendSeen(numero);
+            const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
             if (relatoriosProntos) {
-                // Se TRUE, executa o código original
                 await enviarRelatoriosImagem(client, message);
                 await registrarUso(numero, 'Relatórios em Imagem');
                 if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
-                await client.sendSeen(numero);
             } else {
-                // Se FALSE, envia o aviso
                 await client.sendMessage(message.from, MENSAGEM_RELATORIOS_INDISPONIVEIS);
-                await client.sendSeen(numero);
             }
             break;
         }
@@ -203,27 +158,26 @@ client.on('message', async message => {
             );
             await registrarUso(numero, 'Suporte (Demanda Manual)');
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
-            // Não marca como lida
             break;
         case '4':
             etapas[numero] = { etapa: 'remuneracao' };
+            await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             await client.sendMessage(message.from, 'Por favor, informe sua *matrícula* para continuar, lembrando que só pode ter os números na próxima mensagem!');
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
-            await client.sendSeen(numero);
             break;
         case '5':
             await client.sendMessage(message.from, 'Por favor, envie o código do PDV que deseja consultar as tarefas!');
             etapas[numero] = { etapa: 'pdv' };
+            await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
-            await client.sendSeen(numero);
             break;
         case '6':
+            await client.sendSeen(numero);
             await enviarListaContatos(client, message);
             await registrarUso(numero, 'Lista de Contatos');
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
-            await client.sendSeen(numero);
             break;
         case 'menu':
             const hora = new Date().getHours();
