@@ -19,6 +19,7 @@ const enviarResumoPDV = require('./src/handlers/enviarResumoPDV');
 const enviarListaContatos = require('./src/handlers/enviarListaContatos');
 
 let atendidos = lerJson(ATENDIDOS_PATH, []);
+const usuariosAguardandoRelatorio = new Set(); // <--- LISTA DE ESPERA CASO NÃO TENHA SAÍDO OS RELATÓRIOS AINDA
 
 // Inicialização do cliente WhatsApp
 const client = new Client({
@@ -37,8 +38,46 @@ client.on('qr', qr => qrcode.generate(qr, { small: true }));
 client.on('ready', () => {
     console.log('✅ Bot conectado!');
     
-    // Inicia o ciclo de lembretes de água, passando o 'client' para o módulo separado
-    //iniciarLembretesDeAgua(client);
+   // Define o intervalo da verificação (ex: 5 minutos)
+    // 5 * 60 * 1000 = 300.000 milissegundos
+    const INTERVALO_VERIFICACAO = 3 * 60 * 1000; 
+
+    // Inicia o "timer" para notificar sobre relatórios
+    setInterval(async () => {
+        // 1. Verifica se há alguém na lista de espera. Se não, não faz nada.
+        if (usuariosAguardandoRelatorio.size === 0) {
+            return; 
+        }
+
+        console.log(`[VERIFICADOR]: Checando relatórios para ${usuariosAguardandoRelatorio.size} usuários em espera...`);
+
+        try {
+            // 2. Verifica se os relatórios estão prontos
+            const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF); // Usamos um como referência
+
+            // 3. Se estiverem prontos, notifica a todos e limpa a lista
+            if (relatoriosProntos) {
+                console.log('[VERIFICADOR]: ✅ Relatórios disponíveis! Notificando usuários...');
+                
+                const mensagemNotificacao = "🎉 Boa notícia! Os relatórios que você solicitou já estão disponíveis.\n\nDigite '1' para PDF ou '2' para Imagens para recebê-los agora.";
+
+                // Envia a notificação para cada usuário na lista
+                for (const userNumero of usuariosAguardandoRelatorio) {
+                    await client.sendMessage(userNumero, mensagemNotificacao);
+                }
+
+                // Limpa a lista para não notificar novamente
+                usuariosAguardandoRelatorio.clear(); 
+                console.log('[VERIFICADOR]: Lista de espera de relatórios foi limpa.');
+            } else {
+                console.log('[VERIFICADOR]: Relatórios ainda não disponíveis.');
+            }
+
+        } catch (error) {
+            console.error('[VERIFICADOR]: Erro ao checar arquivos:', error);
+        }
+
+    }, INTERVALO_VERIFICACAO);
 });
 
 // Marcar mensagens de grupos como lidas (sem menção)
@@ -120,37 +159,51 @@ client.on('message', async message => {
         }
     }
 
-    const MENSAGEM_RELATORIOS_INDISPONIVEIS = '⚠️ Relatórios ainda não gerados por favor, aguarde que será avisadoquando estiver disponível. 🤖';
+    const MENSAGEM_RELATORIOS_INDISPONIVEIS = '⚠️  Relatórios ainda não gerados. Vou te avisar assim que estiverem disponíveis! 🤖. 🤖';
 
-   switch (opcao.toLowerCase()) {
-        case '1': { 
-            await client.sendSeen(numero);
+switch (opcao.toLowerCase()) {
+    case '1': { 
+        await client.sendSeen(numero);
 
-            const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
-            if (relatoriosProntos) {
-                await enviarRelatoriosPdf(client, message);
-                await registrarUso(numero, 'Relatórios em PDF');
-                if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
+        const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
+        if (relatoriosProntos) {
+            await enviarRelatoriosPdf(client, message);
+            await registrarUso(numero, 'Relatórios em PDF');
+            if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
+            
+            // Se o usuário estava na lista, removemos para não notificá-lo à toa
+            usuariosAguardandoRelatorio.delete(numero); 
 
-            } else {
-                await client.sendMessage(message.from, MENSAGEM_RELATORIOS_INDISPONIVEIS);
-            }
-            break;
+        } else {
+            await client.sendMessage(message.from, MENSAGEM_RELATORIOS_INDISPONIVEIS);
+            
+            // Adiciona o usuário à lista de espera
+            usuariosAguardandoRelatorio.add(numero); 
+            console.log(`Usuário ${numero} adicionado à lista de espera para relatórios.`);
         }
+        break;
+    }
 
-        case '2': {
-            await client.sendSeen(numero);
-            const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
-            if (relatoriosProntos) {
-                await enviarRelatoriosImagem(client, message);
-                await registrarUso(numero, 'Relatórios em Imagem');
-                if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
-            } else {
-                await client.sendMessage(message.from, MENSAGEM_RELATORIOS_INDISPONIVEIS);
-            }
-            break;
+    case '2': {
+        await client.sendSeen(numero);
+        const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
+        if (relatoriosProntos) {
+            await enviarRelatoriosImagem(client, message);
+            await registrarUso(numero, 'Relatórios em Imagem');
+            if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
+
+            // Se o usuário estava na lista, removemos para não notificá-lo à toa
+            usuariosAguardandoRelatorio.delete(numero);
+
+        } else {
+            await client.sendMessage(message.from, MENSAGEM_RELATORIOS_INDISPONIVEIS);
+            
+            // Adiciona o usuário à lista de espera
+            usuariosAguardandoRelatorio.add(numero);
+            console.log(`Usuário ${numero} adicionado à lista de espera para relatórios.`);
         }
-
+        break;
+    }
         case '3':
             await client.sendMessage(
                 message.from,
