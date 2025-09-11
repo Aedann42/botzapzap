@@ -1,3 +1,4 @@
+const fs = require('fs'); // <-- ADICIONADO: Módulo para escrever no arquivo
 const { lerJson, REPRESENTANTES_PATH, ATENDIDOS_PATH } = require('../utils/dataHandler.js');
 const MENU_ATIVO = require('../config/menuOptionsAtivo.js');
 
@@ -11,12 +12,10 @@ async function enviarMenuAtivacao(client) {
 
     try {
         const representantes = lerJson(REPRESENTANTES_PATH, []);
-        const atendidos = lerJson(ATENDIDOS_PATH, []);
+        const atendidos = lerJson(ATENDIDOS_PATH, []); // Carrega a lista atual de atendidos
 
-        // Usar um Set para busca rápida (muito mais eficiente)
         const contatosAtendidos = new Set(atendidos);
 
-        // Filtrar representantes que não estão na lista de atendidos
         const alvos = representantes.filter(rep => {
             const numeroCompleto = `${rep.telefone}@c.us`;
             return !contatosAtendidos.has(numeroCompleto);
@@ -38,8 +37,15 @@ async function enviarMenuAtivacao(client) {
                 console.log(`- Mensagem de ativação enviada para: ${rep.nome} (${numero})`);
                 contadorEnvios++;
 
-                // IMPORTANTE: Pausa aleatória para evitar bloqueio por spam.
-                // Pausa entre 5 e 10 segundos.
+                // =======================================================================
+                // === CORREÇÃO ADICIONADA AQUI ===
+                // Adiciona o número à lista de atendidos em memória
+                atendidos.push(numero);
+                // Salva a lista atualizada no arquivo JSON
+                fs.writeFileSync(ATENDIDOS_PATH, JSON.stringify(atendidos, null, 2));
+                console.log(`- Usuário ${numero} adicionado a atendidos.json.`);
+                // =======================================================================
+
                 const delay = Math.floor(Math.random() * 5000) + 5000;
                 await new Promise(resolve => setTimeout(resolve, delay));
 
