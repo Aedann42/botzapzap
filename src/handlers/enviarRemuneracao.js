@@ -41,7 +41,7 @@ async function processNextRemuneracaoRequest() {
         
         // --- Caminho UNC para o arquivo ---
         const arquivoPath = path.join(
-            String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\8 - AGOSTO\_GERADOR PDF\REMUNERACAO`,
+            String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\9 - SETEMBRO\_GERADOR PDF\REMUNERACAO`,
             setor,
             `${setor}.pdf`
         );

@@ -220,7 +220,7 @@ switch (opcao.toLowerCase()) {
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
         case '5':
-            await client.sendMessage(message.from, 'Por favor, envie o código do PDV que deseja consultar as tarefas!');
+            await client.sendMessage(message.from, 'Por favor, envie o código do PDV que deseja consultar as tarefas! ENVIE APENAS OS NUMEROS');
             etapas[numero] = { etapa: 'pdv' };
             await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));

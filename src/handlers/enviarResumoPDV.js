@@ -47,7 +47,7 @@ async function processNextExcelRequest() {
 
 // --- Módulo principal ---
 module.exports = async (client, message) => {
-    const codigoPDV = message.body.trim(); // <- mantém como string limpa
+    const codigoPDV = message.body.replace(/\D/g, ''); // <- Extrai APENAS os dígitos da mensagem
     console.log('🔍 Código NB recebido do usuário:', codigoPDV);
 
     const arquivo = path.join(
@@ -95,7 +95,7 @@ module.exports = async (client, message) => {
                     const nbPlanilha = String(row.getCell(5).value).trim(); // <- pega diretamente o valor do NB
                     const codigo = String(codigoPDV).trim();
 
-                    if (nbPlanilha === codigo) {
+                    if (parseInt(nbPlanilha, 10) === parseInt(codigo, 10)) {
                         correspondencias++;
 
                         if (!revenda) {
@@ -113,19 +113,19 @@ module.exports = async (client, message) => {
                         const tarefa = getCellValueAsString(row.getCell(17)) || '-';
                         const completa = row.getCell(18).value === 1 ? '✅ Sim' : '❌ Não';
                         const validada = row.getCell(19).value === 1 ? '✅ Sim' : '❌ Não';
-                        const categoria = getCellValueAsString(row.getCell(9)) || '-';
+                        const categoria = getCellValueAsString(row.getCell(13)) || '-'; // Coluna M: Programa (AJUSTE CONFORME NECESSÁRIO)
 
-                        if (row.getCell(20).value === 1) totalCompletas++;
-                        if (row.getCell(21).value === 1) totalValidadas++;
+    if (row.getCell(18).value === 1) totalCompletas++; // Contar a coluna R (Completa)
+    if (row.getCell(19).value === 1) totalValidadas++; // Contar a coluna S (Validada)
 
-                        linhas.push(
-                            `🗓️ *Data Criação:* ${dataCriacao}\n` +
-                            `📝 *Tarefa:* ${tarefa}\n` +
-                            `✅ *Completa:* ${completa}\n` +
-                            `🔎 *Validada:* ${validada}\n` +
-                            `🏷️ *Categoria:* ${categoria}`
-                        );
-                    }
+    linhas.push(
+        `🗓️ *Data Criação:* ${dataCriacao}\n` +
+        `📝 *Tarefa:* ${tarefa}\n` +
+        `✅ *Completa:* ${completa}\n` +
+        `🔎 *Validada:* ${validada}\n` +
+        `🏷️ *Categoria:* ${categoria}`
+    );
+}
                 });
 
                 const percentualValidadas = correspondencias > 0
