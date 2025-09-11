@@ -107,6 +107,7 @@ client.on('message_create', async (message) => {
         const mockMessage = {
             from: targetUser,
             body: commandForUser,
+            _operator_triggered: true // <-- Faz com que o /representante receba uma flag
         };
 
         await processUserMessage(mockMessage);
@@ -222,11 +223,7 @@ async function processUserMessage(message) {
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
         case '4':
-            etapas[numero] = { etapa: 'remuneracao' };
-            await client.sendSeen(numero);
-            fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-            await client.sendMessage(message.from, 'Por favor, informe sua *matrícula* para continuar, lembrando que só pode ter os números na próxima mensagem!');
-            if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
+            await enviarRemuneracao(client, message);
             break;
         case '5':
             await client.sendMessage(message.from, 'Por favor, envie o código do PDV que deseja consultar as tarefas! ENVIE APENAS OS NUMEROS');
