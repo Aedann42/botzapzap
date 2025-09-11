@@ -20,9 +20,9 @@ O **BotZapZap** foi desenvolvido para ser o assistente virtual de cada represent
 
 Este bot foi construído com uma série de funcionalidades pensadas para resolver problemas reais do dia a dia da equipe:
 
--   **Distribuição Automatizada de Relatórios:** Envia relatórios de acompanhamento diário em formato PDF ou Imagem, buscando os arquivos mais recentes diretamente da rede interna da empresa assim que são gerados.
+-   **Distribuição Automatizada de Relatórios:** Envia relatórios de acompanhamento diário em formato PDF ou Imagem, buscando os arquivos mais recentes diretamente da rede interna da empresa assim que são gerados. Vale ressaltar que apenas um numero específico pode ter acesso a sua pasta de relatórios garantindo assim segurança e pratícidade.
 
--   **Consulta Segura de Remuneração:** Permite que o representante consulte sua planilha de remuneração. A camada de segurança, que solicita a matrícula pessoal do representante como senha, foi uma **ideia implementada em colaboração com o Gerente Comercial da Tarumã**, garantindo a total confidencialidade dos dados.
+-   **Consulta Segura de Remuneração:** Permite que o representante consulte sua planilha de remuneração. A camada de segurança, que solicita a matrícula pessoal do representante como senha, foi uma **ideia implementada em colaboração com o Gerente Comercial da Tarumã**, garantindo a total confidencialidade dos dados. Essa função foi adicionada pois eventualmente ocorrem alterações de qual é o representante de alguma rota porem o telefone é sempre o mesmo.
 
 -   **Consulta de Tarefas de PDV:** O bot acessa uma planilha na rede e retorna as tarefas pendentes para um Ponto de Venda (PDV) específico, agilizando o trabalho de campo.
 
