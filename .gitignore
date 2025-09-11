@@ -12,6 +12,7 @@ atendidos.json
 representantes.json
 senhaRemuneracao.json
 /logs
+stafs.json
 
 # Pasta de sessão do WhatsApp
 /.session

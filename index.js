@@ -17,9 +17,10 @@ const enviarRelatoriosPdf = require('./src/handlers/enviarRelatoriosPdf');
 const enviarRemuneracao = require('./src/handlers/enviarRemuneracao');
 const enviarResumoPDV = require('./src/handlers/enviarResumoPDV');
 const enviarListaContatos = require('./src/handlers/enviarListaContatos');
+const enviarMenuAtivacao = require('./src/handlers/AtivacaoRepresentantes.js'); // <-- Importação da nova funcionalidade
 
 let atendidos = lerJson(ATENDIDOS_PATH, []);
-const usuariosAguardandoRelatorio = new Set(); // <--- LISTA DE ESPERA CASO NÃO TENHA SAÍDO OS RELATÓRIOS AINDA
+const usuariosAguardandoRelatorio = new Set();
 
 // Inicialização do cliente WhatsApp
 const client = new Client({
@@ -34,40 +35,31 @@ const client = new Client({
 
 client.on('qr', qr => qrcode.generate(qr, { small: true }));
 
-// --- ALTERAÇÃO: A chamada para a funcionalidade de água agora é uma única linha ---
 client.on('ready', () => {
     console.log('✅ Bot conectado!');
     
-   // Define o intervalo da verificação (ex: 5 minutos)
-    // 5 * 60 * 1000 = 300.000 milissegundos
-    const INTERVALO_VERIFICACAO = 3 * 60 * 1000; 
+    const INTERVALO_VERIFICACAO = 3 * 60 * 1000;
 
-    // Inicia o "timer" para notificar sobre relatórios
     setInterval(async () => {
-        // 1. Verifica se há alguém na lista de espera. Se não, não faz nada.
         if (usuariosAguardandoRelatorio.size === 0) {
-            return; 
+            return;
         }
 
         console.log(`[VERIFICADOR]: Checando relatórios para ${usuariosAguardandoRelatorio.size} usuários em espera...`);
 
         try {
-            // 2. Verifica se os relatórios estão prontos
-            const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF); // Usamos um como referência
+            const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
 
-            // 3. Se estiverem prontos, notifica a todos e limpa a lista
             if (relatoriosProntos) {
                 console.log('[VERIFICADOR]: ✅ Relatórios disponíveis! Notificando usuários...');
                 
                 const mensagemNotificacao = "🎉 Boa notícia! Os relatórios que você solicitou já estão disponíveis.\n\nDigite '1' para PDF ou '2' para Imagens para recebê-los agora.";
 
-                // Envia a notificação para cada usuário na lista
                 for (const userNumero of usuariosAguardandoRelatorio) {
                     await client.sendMessage(userNumero, mensagemNotificacao);
                 }
 
-                // Limpa a lista para não notificar novamente
-                usuariosAguardandoRelatorio.clear(); 
+                usuariosAguardandoRelatorio.clear();
                 console.log('[VERIFICADOR]: Lista de espera de relatórios foi limpa.');
             } else {
                 console.log('[VERIFICADOR]: Relatórios ainda não disponíveis.');
@@ -80,21 +72,53 @@ client.on('ready', () => {
     }, INTERVALO_VERIFICACAO);
 });
 
-// Marcar mensagens de grupos como lidas (sem menção)
-client.on('message', async msg => {
-    if (!msg.from.endsWith('@g.us')) return;
-    const chat = await msg.getChat();
-    const isMention = msg.mentionedIds && msg.mentionedIds.includes(client.info.wid._serialized);
-    if (!isMention) {
-        await chat.sendSeen();
+// ============================================================================================
+// === LISTENER PARA COMANDOS DO OPERADOR (VIA WHATSAPP WEB) ===
+// ============================================================================================
+client.on('message_create', async (message) => {
+    // 1. Ignora se a mensagem não foi enviada por você (pelo número do bot)
+    if (!message.fromMe) {
+        return;
+    }
+
+    // --- COMANDO DE ATIVAÇÃO DE NOVOS REPRESENTANTES ---
+    if (message.body.trim() === '/ativar') {
+        console.log('[OPERADOR]: Comando /ativar recebido.');
+        
+        await client.sendMessage(message.to, '🤖 Iniciando campanha de ativação para novos representantes... Este processo pode levar alguns minutos. Avisarei quando terminar.');
+
+        const resultado = await enviarMenuAtivacao(client);
+
+        await client.sendMessage(message.to, `✅ ${resultado}`);
+        
+        return;
+    }
+
+    // --- COMANDO PARA AJUDAR REPRESENTANTE INDIVIDUAL ---
+    const commandPrefix = '/representante ';
+    if (message.body.startsWith(commandPrefix)) {
+        console.log(`[OPERADOR]: Comando detectado no chat ${message.to}`);
+
+        const commandForUser = message.body.substring(commandPrefix.length);
+        const targetUser = message.to;
+        
+        console.log(`[OPERADOR]: Executando comando '${commandForUser}' para o usuário ${targetUser}`);
+
+        const mockMessage = {
+            from: targetUser,
+            body: commandForUser,
+        };
+
+        await processUserMessage(mockMessage);
     }
 });
 
-// Mensagens privadas
-client.on('message', async message => {
-    const numero = message.from;
 
-    if (numero.endsWith('@g.us')) return;
+// ============================================================================================
+// === FUNÇÃO CENTRAL PARA PROCESSAR MENSAGENS DE USUÁRIOS ===
+// ============================================================================================
+async function processUserMessage(message) {
+    const numero = message.from;
 
     const representantes = lerJson(REPRESENTANTES_PATH, []);
     const autorizado = representantes.some(rep => rep.telefone === numero.replace('@c.us', ''));
@@ -106,7 +130,7 @@ client.on('message', async message => {
 
     if (!atendidos.includes(numero)) {
         const hora = new Date().getHours();
-        const saudacaoBase = hora <= 12 ? 'Bom dia' : 'Boa tarde';
+        const saudacaoBase = hora <= 12 ? 'Bom dia' : (hora <= 18 ? 'Boa tarde' : 'Boa noite');
         const saudacoesAlternativas = [
             'Tudo certo por aí?', 'Como vai você?', 'Tudo bem por aí?',
             'Espero que esteja tudo em ordem.', 'Como posso ajudar?',
@@ -159,56 +183,41 @@ client.on('message', async message => {
         }
     }
 
-    const MENSAGEM_RELATORIOS_INDISPONIVEIS = '⚠️  Relatórios ainda não gerados. Vou te avisar assim que estiverem disponíveis! 🤖. 🤖';
+    const MENSAGEM_RELATORIOS_INDISPONIVEIS = '⚠️  Relatórios ainda não gerados. Vou te avisar assim que estiverem disponíveis! 🤖';
 
-switch (opcao.toLowerCase()) {
-    case '1': { 
-        await client.sendSeen(numero);
-
-        const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
-        if (relatoriosProntos) {
-            await enviarRelatoriosPdf(client, message);
-            await registrarUso(numero, 'Relatórios em PDF');
-            if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
-            
-            // Se o usuário estava na lista, removemos para não notificá-lo à toa
-            usuariosAguardandoRelatorio.delete(numero); 
-
-        } else {
-            await client.sendMessage(message.from, MENSAGEM_RELATORIOS_INDISPONIVEIS);
-            
-            // Adiciona o usuário à lista de espera
-            usuariosAguardandoRelatorio.add(numero); 
-            console.log(`Usuário ${numero} adicionado à lista de espera para relatórios.`);
+    switch (opcao.toLowerCase()) {
+        case '1': { 
+            await client.sendSeen(numero);
+            const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
+            if (relatoriosProntos) {
+                await enviarRelatoriosPdf(client, message);
+                await registrarUso(numero, 'Relatórios em PDF');
+                if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
+                usuariosAguardandoRelatorio.delete(numero); 
+            } else {
+                await client.sendMessage(message.from, MENSAGEM_RELATORIOS_INDISPONIVEIS);
+                usuariosAguardandoRelatorio.add(numero); 
+                console.log(`Usuário ${numero} adicionado à lista de espera para relatórios.`);
+            }
+            break;
         }
-        break;
-    }
-
-    case '2': {
-        await client.sendSeen(numero);
-        const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
-        if (relatoriosProntos) {
-            await enviarRelatoriosImagem(client, message);
-            await registrarUso(numero, 'Relatórios em Imagem');
-            if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
-
-            // Se o usuário estava na lista, removemos para não notificá-lo à toa
-            usuariosAguardandoRelatorio.delete(numero);
-
-        } else {
-            await client.sendMessage(message.from, MENSAGEM_RELATORIOS_INDISPONIVEIS);
-            
-            // Adiciona o usuário à lista de espera
-            usuariosAguardandoRelatorio.add(numero);
-            console.log(`Usuário ${numero} adicionado à lista de espera para relatórios.`);
+        case '2': {
+            await client.sendSeen(numero);
+            const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
+            if (relatoriosProntos) {
+                await enviarRelatoriosImagem(client, message);
+                await registrarUso(numero, 'Relatórios em Imagem');
+                if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
+                usuariosAguardandoRelatorio.delete(numero);
+            } else {
+                await client.sendMessage(message.from, MENSAGEM_RELATORIOS_INDISPONIVEIS);
+                usuariosAguardandoRelatorio.add(numero);
+                console.log(`Usuário ${numero} adicionado à lista de espera para relatórios.`);
+            }
+            break;
         }
-        break;
-    }
         case '3':
-            await client.sendMessage(
-                message.from,
-                'Certo, por favor descreva a sua demanda sem se esquecer do NB e caso necessário encaminhe prints para maior agilidade no atendimento.'
-            );
+            await client.sendMessage(message.from, 'Certo, por favor descreva a sua demanda sem se esquecer do NB e caso necessário encaminhe prints para maior agilidade no atendimento.');
             await registrarUso(numero, 'Suporte (Demanda Manual)');
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
@@ -234,7 +243,7 @@ switch (opcao.toLowerCase()) {
             break;
         case 'menu':
             const hora = new Date().getHours();
-            const saudacaoBase = hora <= 12 ? 'Bom dia' : 'Boa tarde';
+            const saudacaoBase = hora <= 12 ? 'Bom dia' : (hora <= 18 ? 'Boa tarde' : 'Boa noite');
             const saudacoesAlternativas = [
                 'Tudo certo por aí?', 'Como vai você?', 'Tudo bem por aí?',
                 'Espero que esteja tudo em ordem.', 'Como posso ajudar?',
@@ -255,7 +264,27 @@ switch (opcao.toLowerCase()) {
             await registrarUso(numero, 'Exibição do Menu');
             break;
     }
+}
+
+
+// ============================================================================================
+// === LISTENER PRINCIPAL PARA MENSAGENS RECEBIDAS ===
+// ============================================================================================
+client.on('message', async message => {
+    // Processa mensagens de grupo (marcar como lida se não for menção) e para a execução
+    if (message.from.endsWith('@g.us')) {
+        const chat = await message.getChat();
+        const isMention = message.mentionedIds && message.mentionedIds.includes(client.info.wid._serialized);
+        if (!isMention) {
+            await chat.sendSeen();
+        }
+        return; 
+    }
+
+    // Se não for grupo, processa como uma mensagem de usuário normal
+    await processUserMessage(message);
 });
+
 
 // Inicializa o cliente
 client.initialize();
