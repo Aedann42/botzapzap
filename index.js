@@ -240,7 +240,7 @@ async function processUserMessage(message) {
             break;
         case 'menu':
             const hora = new Date().getHours();
-            const saudacaoBase = hora <= 12 ? 'Bom dia' : (hora <= 18 ? 'Boa tarde' : 'Boa noite');
+            const saudacaoBase = hora < 12 ? 'Bom dia' : (hora < 18 ? 'Boa tarde' : 'Boa noite');
             const saudacoesAlternativas = [
                 'Tudo certo por aí?', 'Como vai você?', 'Tudo bem por aí?',
                 'Espero que esteja tudo em ordem.', 'Como posso ajudar?',
