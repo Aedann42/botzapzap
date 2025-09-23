@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const verificarArquivoAtualizado = require('./src/services/checkDateReports.js');
 const { lerJson, registrarUso, REPRESENTANTES_PATH, ETAPAS_PATH, ATENDIDOS_PATH } = require('./src/utils/dataHandler.js');
-const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\9 - SETEMBRO\\_GERADOR PDF\\ACOMPS\\GV4\\MATINAL_GV4.pdf';
+const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\9 - SETEMBRO\\_GERADOR PDF\\ACOMPS\\410\\410_MKTPTT.pdf';
 const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\9 - SETEMBRO\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_3.jpg'
 
 // Importação do texto do menu

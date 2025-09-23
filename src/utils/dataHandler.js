@@ -79,5 +79,6 @@ module.exports = {
     registrarUso,
     REPRESENTANTES_PATH,
     ETAPAS_PATH,
-    ATENDIDOS_PATH
+    ATENDIDOS_PATH,
+    LOG_USO_PATH
 };
