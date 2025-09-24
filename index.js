@@ -53,7 +53,7 @@ client.on('ready', () => {
             if (relatoriosProntos) {
                 console.log('[VERIFICADOR]: ✅ Relatórios disponíveis! Notificando usuários...');
                 
-                const mensagemNotificacao = "🎉 Boa notícia! Os relatórios que você solicitou já estão disponíveis.\n\nDigite '1' para PDF ou '2' para Imagens para recebê-los agora.";
+                const mensagemNotificacao = "🎉 Boa notícia! Os relatórios que você solicitou já estão disponíveis.";
 
                 for (const userNumero of usuariosAguardandoRelatorio) {
                     await client.sendMessage(userNumero, mensagemNotificacao);
