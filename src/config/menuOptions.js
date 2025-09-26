@@ -8,7 +8,8 @@ const MENU_TEXT = `
 4️⃣ - Quero minha planilha de remuneração 💼💰
 5️⃣ - Consultar tarefas do PDV 📋🔍
 6️⃣ - Consultar a lista de telefones úteis Tarumã 📞🏢
-7️⃣ - Consultar Coleta TTC do PDV 📈🏪 <<<< NOVA FUNÇÃO
+7️⃣ - Consultar Coleta TTC do PDV 📈🏪
+8️⃣ - Consultar Bonificação (CT) 🎁
 
 Digite *MENU* a qualquer momento para receber novamente essa mensagem
 `;

@@ -4,7 +4,7 @@ const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
 const verificarArquivoAtualizado = require('./src/services/checkDateReports.js');
-const { lerJson, registrarUso, REPRESENTANTES_PATH, ETAPAS_PATH, ATENDIDOS_PATH } = require('./src/utils/dataHandler.js');
+const { lerJson, registrarUso, REPRESENTANTES_PATH, ETAPAS_PATH, ATENDIDOS_PATH, STAFFS_PATH } = require('./src/utils/dataHandler.js');
 const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\9 - SETEMBRO\\_GERADOR PDF\\ACOMPS\\410\\410_MKTPTT.pdf';
 const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\9 - SETEMBRO\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_3.jpg'
 
@@ -18,9 +18,11 @@ const enviarRemuneracao = require('./src/handlers/enviarRemuneracao');
 const enviarResumoPDV = require('./src/handlers/enviarResumoPDV');
 const enviarListaContatos = require('./src/handlers/enviarListaContatos');
 const enviarMenuAtivacao = require('./src/handlers/AtivacaoRepresentantes.js');
-const enviarColetaTtcPdv = require('./src/handlers/enviarColetaTtcPdv'); // <-- ADICIONADO
+const enviarColetaTtcPdv = require('./src/handlers/enviarColetaTtcPdv');
+const enviarCts = require('./src/handlers/enviarCts');
 
 let atendidos = lerJson(ATENDIDOS_PATH, []);
+const staffs = lerJson(STAFFS_PATH, []);
 const usuariosAguardandoRelatorio = new Set();
 
 // Inicialização do cliente WhatsApp
@@ -77,12 +79,10 @@ client.on('ready', () => {
 // === LISTENER PARA COMANDOS DO OPERADOR (VIA WHATSAPP WEB) ===
 // ============================================================================================
 client.on('message_create', async (message) => {
-    // 1. Ignora se a mensagem não foi enviada por você (pelo número do bot)
     if (!message.fromMe) {
         return;
     }
 
-    // --- COMANDO DE ATIVAÇÃO DE NOVOS REPRESENTANTES ---
     if (message.body.trim() === '/ativar') {
         console.log('[OPERADOR]: Comando /ativar recebido.');
         
@@ -95,7 +95,6 @@ client.on('message_create', async (message) => {
         return;
     }
 
-    // --- COMANDO PARA AJUDAR REPRESENTANTE INDIVIDUAL ---
     const commandPrefix = '/representante ';
     if (message.body.startsWith(commandPrefix)) {
         console.log(`[OPERADOR]: Comando detectado no chat ${message.to}`);
@@ -123,14 +122,15 @@ async function processUserMessage(message) {
     const numero = message.from;
 
     const representantes = lerJson(REPRESENTANTES_PATH, []);
-    const autorizado = representantes.some(rep => rep.telefone === numero.replace('@c.us', ''));
+    const numeroLimpo = numero.replace('@c.us', '');
+    const representante = representantes.find(rep => rep.telefone === numeroLimpo);
 
-    if (!autorizado) {
+    if (!representante) {
         console.log(`Número não autorizado: ${numero}`);
         return;
     }
 
-    if (!atendidos.includes(numero)) {
+    if (!atendidos.includes(numero) && !staffs.some(staff => staff.telefone === numeroLimpo)) {
         const hora = new Date().getHours();
         const saudacaoBase = hora <= 12 ? 'Bom dia' : (hora <= 18 ? 'Boa tarde' : 'Boa noite');
         const saudacoesAlternativas = [
@@ -166,7 +166,7 @@ async function processUserMessage(message) {
                 return;
             }
 
-            if (etapaAtual === 'coleta_ttc') { // <-- ADICIONADO
+            if (etapaAtual === 'coleta_ttc') {
                 await enviarColetaTtcPdv(client, message);
                 await registrarUso(numero, 'Consulta de Coleta TTC PDV');
                 delete etapas[numero];
@@ -247,12 +247,17 @@ async function processUserMessage(message) {
             await registrarUso(numero, 'Lista de Contatos');
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
-        case '7': { // <-- ADICIONADO
+        case '7': {
             await client.sendMessage(message.from, 'Por favor, envie o código do PDV que deseja consultar a *Coleta TTC*! (Apenas números)');
             etapas[numero] = { etapa: 'coleta_ttc' };
             await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
+            break;
+        }
+        case '8': {
+            await enviarCts(client, message, representante);
+            await registrarUso(numero, 'Consulta de Bonificação CT por Setor');
             break;
         }
         case 'menu':
@@ -285,7 +290,6 @@ async function processUserMessage(message) {
 // === LISTENER PRINCIPAL PARA MENSAGENS RECEBIDAS ===
 // ============================================================================================
 client.on('message', async message => {
-    // Processa mensagens de grupo (marcar como lida se não for menção) e para a execução
     if (message.from.endsWith('@g.us')) {
         const chat = await message.getChat();
         const isMention = message.mentionedIds && message.mentionedIds.includes(client.info.wid._serialized);
@@ -295,7 +299,6 @@ client.on('message', async message => {
         return; 
     }
 
-    // Se não for grupo, processa como uma mensagem de usuário normal
     await processUserMessage(message);
 });
 

@@ -10,6 +10,7 @@ const REPRESENTANTES_PATH = path.join(DATA_DIR, 'representantes.json');
 const ETAPAS_PATH = path.join(DATA_DIR, 'etapas.json');
 const ATENDIDOS_PATH = path.join(DATA_DIR, 'atendidos.json');
 const LOG_USO_PATH = path.join(LOGS_DIR, 'log_uso.json');
+const STAFFS_PATH = path.join(DATA_DIR, 'staffs.json');
 
 /**
  * Lê um arquivo JSON de forma segura.
@@ -80,5 +81,6 @@ module.exports = {
     REPRESENTANTES_PATH,
     ETAPAS_PATH,
     ATENDIDOS_PATH,
+    STAFFS_PATH,
     LOG_USO_PATH
 };
