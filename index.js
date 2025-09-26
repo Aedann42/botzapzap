@@ -17,7 +17,8 @@ const enviarRelatoriosPdf = require('./src/handlers/enviarRelatoriosPdf');
 const enviarRemuneracao = require('./src/handlers/enviarRemuneracao');
 const enviarResumoPDV = require('./src/handlers/enviarResumoPDV');
 const enviarListaContatos = require('./src/handlers/enviarListaContatos');
-const enviarMenuAtivacao = require('./src/handlers/AtivacaoRepresentantes.js'); // <-- Importação da nova funcionalidade
+const enviarMenuAtivacao = require('./src/handlers/AtivacaoRepresentantes.js');
+const enviarColetaTtcPdv = require('./src/handlers/enviarColetaTtcPdv'); // <-- ADICIONADO
 
 let atendidos = lerJson(ATENDIDOS_PATH, []);
 const usuariosAguardandoRelatorio = new Set();
@@ -107,7 +108,7 @@ client.on('message_create', async (message) => {
         const mockMessage = {
             from: targetUser,
             body: commandForUser,
-            _operator_triggered: true // <-- Faz com que o /representante receba uma flag
+            _operator_triggered: true
         };
 
         await processUserMessage(mockMessage);
@@ -160,6 +161,14 @@ async function processUserMessage(message) {
             if (etapaAtual === 'pdv') {
                 await enviarResumoPDV(client, message);
                 await registrarUso(numero, 'Consulta de Tarefas PDV');
+                delete etapas[numero];
+                fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+                return;
+            }
+
+            if (etapaAtual === 'coleta_ttc') { // <-- ADICIONADO
+                await enviarColetaTtcPdv(client, message);
+                await registrarUso(numero, 'Consulta de Coleta TTC PDV');
                 delete etapas[numero];
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
                 return;
@@ -238,6 +247,14 @@ async function processUserMessage(message) {
             await registrarUso(numero, 'Lista de Contatos');
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
+        case '7': { // <-- ADICIONADO
+            await client.sendMessage(message.from, 'Por favor, envie o código do PDV que deseja consultar a *Coleta TTC*! (Apenas números)');
+            etapas[numero] = { etapa: 'coleta_ttc' };
+            await client.sendSeen(numero);
+            fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+            if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
+            break;
+        }
         case 'menu':
             const hora = new Date().getHours();
             const saudacaoBase = hora < 12 ? 'Bom dia' : (hora < 18 ? 'Boa tarde' : 'Boa noite');

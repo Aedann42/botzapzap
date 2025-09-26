@@ -8,7 +8,7 @@ const LOGS_DIR = path.join(__dirname, '..', '..', 'logs');
 
 const REPRESENTANTES_PATH = path.join(DATA_DIR, 'representantes.json');
 const ETAPAS_PATH = path.join(DATA_DIR, 'etapas.json');
-const ATENDIDOS_PATH = path.join(DATA_DIR, 'atendidos.json'); // <-- ADICIONE ESTA LINHA
+const ATENDIDOS_PATH = path.join(DATA_DIR, 'atendidos.json');
 const LOG_USO_PATH = path.join(LOGS_DIR, 'log_uso.json');
 
 /**
