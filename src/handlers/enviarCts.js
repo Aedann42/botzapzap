@@ -67,7 +67,7 @@ module.exports = async (client, message, representante) => {
     console.log(`🔍 Buscando CTs para o setor: ${setorUsuario}`);
 
     const arquivo = path.join(
-        '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\9 - SETEMBRO\\',
+        '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\10 - OUTUBRO\\',
         '_CT 2025 - Controle Bonificacao.xlsx'
     );
 

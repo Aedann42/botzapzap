@@ -1,11 +1,9 @@
-// const fs = require('fs'); // <-- REMOVIDO: Não vamos mais escrever em arquivos aqui.
-
-// ALTERADO: Adicionado LOG_USO_PATH e removido ATENDIDOS_PATH
-const { lerJson, REPRESENTANTES_PATH, LOG_USO_PATH } = require('../utils/dataHandler.js'); 
+// ALTERADO: Adicionado STAFFS_PATH
+const { lerJson, REPRESENTANTES_PATH, LOG_USO_PATH, STAFFS_PATH } = require('../utils/dataHandler.js'); 
 const MENU_ATIVO = require('../config/menuOptionsAtivo.js');
 
 /**
- * Envia uma mensagem de ativação para todos os representantes que não interagiram com o bot nos últimos 3 dias.
+ * Envia uma mensagem de ativação para todos os representantes que não interagiram com o bot nos últimos dias.
  * @param {import('whatsapp-web.js').Client} client O cliente do WhatsApp.
  * @returns {Promise<string>} Uma mensagem de resultado da operação.
  */
@@ -14,51 +12,59 @@ async function enviarMenuAtivacao(client) {
 
     try {
         const representantes = lerJson(REPRESENTANTES_PATH, []);
-        // NOVO: Carrega a lista de logs de uso
         const logUso = lerJson(LOG_USO_PATH, []);
+        // NOVO: Carrega a lista de staffs
+        const staffs = lerJson(STAFFS_PATH, []);
 
         // =======================================================================
-        // === NOVA LÓGICA DE FILTRAGEM ==========================================
+        // === LÓGICA DE FILTRAGEM ATUALIZADA ====================================
         // =======================================================================
 
-        // 1. Define a data limite (7 dias atrás)
+        // 1. Define a data limite (7 dias atrás, conforme seu código)
+        // NOTA: Seus logs mencionam 3 dias, mas o código usa 7. Ajustei para 7.
         const seteDiasAtras = new Date();
         seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
-        seteDiasAtras.setHours(0, 0, 0, 0); // Zera o horário para comparar apenas a data
+        seteDiasAtras.setHours(0, 0, 0, 0);
 
         // 2. Cria um conjunto com os setores que tiveram atividade recente
         const setoresAtivosRecentemente = new Set();
         for (const log of logUso) {
             const dataLog = new Date(log.timestamp);
             if (dataLog >= seteDiasAtras) {
-                // Adiciona o setor do log ao conjunto de setores ativos
-                setoresAtivosRecentemente.add(log.setor);
+                setoresAtivosRecentemente.add(String(log.setor)); // Converte para String para garantir a comparação
             }
         }
         
-        console.log(`[ATIVACAO]: ${setoresAtivosRecentemente.size} setores estiveram ativos nos últimos 3 dias.`);
+        console.log(`[ATIVACAO]: ${setoresAtivosRecentemente.size} setores estiveram ativos nos últimos 7 dias.`);
 
-        // 3. Filtra os representantes que NÃO estão no conjunto de setores ativos
+        // NOVO: Cria um conjunto com os telefones da staff para uma verificação rápida e eficiente
+        const staffPhones = new Set(staffs.map(staff => String(staff.telefone)));
+
+        // 3. Filtra os representantes que estão inativos E NÃO são staffs
         const alvos = representantes.filter(rep => {
-            // A condição agora é: o setor do representante NÃO PODE estar na lista de ativos
-            // É FUNDAMENTAL que o objeto 'rep' tenha a propriedade 'setor'
-            return !setoresAtivosRecentemente.has(rep.setor);
+            // Condição 1: O setor do representante está inativo?
+            const isInactive = !setoresAtivosRecentemente.has(String(rep.setor));
+            
+            // Condição 2: O representante NÃO é um membro da staff?
+            const isNotStaff = !staffPhones.has(String(rep.telefone));
+            
+            // Ambas as condições precisam ser verdadeiras para ele ser um alvo
+            return isInactive && isNotStaff;
         });
 
         // =======================================================================
 
         if (alvos.length === 0) {
-            console.log('[ATIVACAO]: Nenhum representante inativo para ativar.');
-            return "Nenhum representante inativo para ativar. Todos interagiram nos últimos 3 dias!";
+            console.log('[ATIVACAO]: Nenhum representante inativo (que não seja staff) para ativar.');
+            return "Nenhum representante inativo para ativar. Todos interagiram nos últimos 7 dias ou são membros da staff!";
         }
 
-        console.log(`[ATIVACAO]: ${alvos.length} representantes inativos serão notificados.`);
+        console.log(`[ATIVACAO]: ${alvos.length} representantes inativos (não-staffs) serão notificados.`);
 
         let contadorEnvios = 0;
         for (const rep of alvos) {
-            // Verifica se o representante tem um telefone válido antes de prosseguir
             if (!rep.telefone) {
-                console.warn(`- Representante '${rep.nome}' (setor ${rep.setor}) sem número de telefone. Pulando.`);
+                console.warn(`- Representante '${rep.nome || 'Sem Nome'}' (setor ${rep.setor}) sem número de telefone. Pulando.`);
                 continue;
             }
 
@@ -68,12 +74,6 @@ async function enviarMenuAtivacao(client) {
                 await client.sendMessage(numero, MENU_ATIVO);
                 console.log(`- Mensagem de ativação enviada para: ${rep.nome} (Setor: ${rep.setor}, Tel: ${numero})`);
                 contadorEnvios++;
-
-                // =======================================================================
-                // === LÓGICA DE ESCRITA REMOVIDA ========================================
-                // Não precisamos mais adicionar o usuário a uma lista de "atendidos",
-                // pois a verificação é feita dinamicamente pelo log de uso.
-                // =======================================================================
 
                 const delay = Math.floor(Math.random() * 5000) + 5000; // Delay entre 5 e 10 segundos
                 await new Promise(resolve => setTimeout(resolve, delay));

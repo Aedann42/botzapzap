@@ -7,6 +7,7 @@ const SENHA_REMUNERACAO_PATH = path.join(__dirname, '..', '..', 'data', 'senhaRe
 let isSendingRemuneracao = false;
 const remuneracaoSendQueue = [];
 
+// ✅ FUNÇÃO MODIFICADA PARA ENVIAR MÚLTIPLOS ARQUIVOS
 async function processNextRemuneracaoRequest() {
     if (remuneracaoSendQueue.length === 0) {
         isSendingRemuneracao = false;
@@ -27,42 +28,68 @@ async function processNextRemuneracaoRequest() {
 
         if (!representante || !representante.setor) {
             await client.sendMessage(numero, '❌ Ocorreu um erro ao recuperar seus dados. Tente novamente.');
-            return;
+            return; // Finaliza o processamento para este usuário
         }
         
         const setor = representante.setor.toString();
         
-        const arquivoPath = path.join(
-            String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\9 - SETEMBRO\_GERADOR PDF\REMUNERACAO`,
-            setor,
-            `${setor}.pdf`
+        // 1. Caminho para o DIRETÓRIO (pasta) do setor
+        const diretorioPath = path.join(
+            String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\10 - OUTUBRO\_GERADOR PDF\REMUNERACAO`,
+            setor
         );
 
-        console.log("📁 Tentando acessar arquivo em:", arquivoPath);
+        console.log("📁 Tentando acessar a pasta em:", diretorioPath);
 
-        if (!fs.existsSync(arquivoPath)) {
-            await client.sendMessage(numero, `❌ A planilha de remuneração para o setor ${setor} não foi encontrada. Por favor, contate o administrador.`);
-            return;
+        // 2. Verifica se a PASTA existe
+        if (!fs.existsSync(diretorioPath)) {
+            await client.sendMessage(numero, `❌ A pasta de remuneração para o setor ${setor} não foi encontrada. Por favor, contate o administrador.`);
+            return; // Finaliza o processamento para este usuário
         }
 
-        await client.sendMessage(numero, '🔄 Sua planilha está sendo preparada para envio, aguarde...');
-        const media = MessageMedia.fromFilePath(arquivoPath);
-        await client.sendMessage(numero, media, {
-            sendMediaAsDocument: true,
-            caption: `📄 Sua planilha de remuneração do setor ${setor} está aqui!`
-        });
+        // 3. Lê todos os arquivos da pasta
+        const arquivos = fs.readdirSync(diretorioPath);
 
-        await client.sendMessage(numero, '✅ Sua planilha foi enviada com sucesso!');
+        if (arquivos.length === 0) {
+            await client.sendMessage(numero, `⚠️ A pasta do setor ${setor} foi encontrada, mas está vazia. Nenhum arquivo para enviar.`);
+            return; // Finaliza o processamento para este usuário
+        }
+
+        await client.sendMessage(numero, `🔄 Encontrei ${arquivos.length} arquivo(s). Preparando para envio, aguarde...`);
+
+        // 4. Faz um loop e envia CADA arquivo encontrado
+        for (const nomeArquivo of arquivos) {
+            const caminhoCompletoArquivo = path.join(diretorioPath, nomeArquivo);
+            
+            // Ignora arquivos temporários ou de sistema, se necessário
+            if (nomeArquivo.startsWith('~') || nomeArquivo.startsWith('.')) {
+                console.log(`[Remuneração Fila] Ignorando arquivo temporário: ${nomeArquivo}`);
+                continue; // Pula para o próximo arquivo
+            }
+
+            const media = MessageMedia.fromFilePath(caminhoCompletoArquivo);
+            
+            console.log(`[Remuneração Fila] Enviando arquivo "${nomeArquivo}" para ${numero}.`);
+            await client.sendMessage(numero, media, {
+                sendMediaAsDocument: true,
+                caption: `📄 Segue o arquivo: ${nomeArquivo}`
+            });
+        }
+
+        await client.sendMessage(numero, '✅ Todos os seus arquivos foram enviados com sucesso!');
         await client.sendSeen(numero);
-        console.log(`[Remuneração Fila] Arquivo enviado com sucesso para ${numero}.`);
+        console.log(`[Remuneração Fila] ${arquivos.length} arquivo(s) enviados com sucesso para ${numero}.`);
+
     } catch (err) {
         console.error("❌ Erro inesperado ao processar remuneração na fila:", err);
         await client.sendMessage(numero, "❌ Ocorreu um erro ao enviar sua planilha de remuneração. Por favor, tente novamente mais tarde.");
     } finally {
+        // Chama o próximo da fila, independentemente de sucesso ou falha
         processNextRemuneracaoRequest();
     }
 }
 
+// NENHUMA MUDANÇA DAQUI PARA BAIXO
 async function enviarRemuneracao(client, message) {
     const numero = message.from;
     const texto = message.body.trim();

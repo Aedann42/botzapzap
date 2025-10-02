@@ -77,7 +77,7 @@ module.exports = async function enviarRelatoriosPdf(client, message) {
         return;
     }
 
-    const pastaBase = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\9 - SETEMBRO\_GERADOR PDF\ACOMPS`;
+    const pastaBase = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\10 - OUTUBRO\_GERADOR PDF\ACOMPS`;
     const pastaSetor = path.join(pastaBase, String(pessoa.setor));
     let arquivosParaEnviar = [];
 

@@ -51,7 +51,7 @@ module.exports = async (client, message) => {
     console.log('🔍 Código NB recebido do usuário:', codigoPDV);
 
     const arquivo = path.join(
-        '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\9 - SETEMBRO\\_GERADOR PDF\\',
+        '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\10 - OUTUBRO\\_GERADOR PDF\\',
         'Acomp Tarefas do Dia.xlsx'
     );
 

@@ -5,8 +5,8 @@ const fs = require('fs');
 const path = require('path');
 const verificarArquivoAtualizado = require('./src/services/checkDateReports.js');
 const { lerJson, registrarUso, REPRESENTANTES_PATH, ETAPAS_PATH, ATENDIDOS_PATH, STAFFS_PATH } = require('./src/utils/dataHandler.js');
-const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\9 - SETEMBRO\\_GERADOR PDF\\ACOMPS\\410\\410_MKTPTT.pdf';
-const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\9 - SETEMBRO\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_3.jpg'
+const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\10 - OUTUBRO\\_GERADOR PDF\\ACOMPS\\410\\410_MKTPTT.pdf';
+const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\10 - OUTUBRO\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_3.jpg'
 
 // Importação do texto do menu
 const MENU_TEXT = require('./src/config/menuOptions');
@@ -130,7 +130,7 @@ async function processUserMessage(message) {
         return;
     }
 
-    if (!atendidos.includes(numero) && !staffs.some(staff => staff.telefone === numeroLimpo)) {
+    if (!atendidos.includes(numero) && !staffs.some(staff => String(staff.telefone) === numeroLimpo)) {
         const hora = new Date().getHours();
         const saudacaoBase = hora <= 12 ? 'Bom dia' : (hora <= 18 ? 'Boa tarde' : 'Boa noite');
         const saudacoesAlternativas = [

@@ -5,7 +5,7 @@ const MENU_TEXT = `
 1️⃣ - Quero meus relatórios em PDF 📄✨
 2️⃣ - Quero meus relatórios em imagens 🖼️🎨
 3️⃣ - Preciso de ajuda do APR para demais assuntos 💬🤔
-4️⃣ - Quero minha planilha de remuneração 💼💰
+4️⃣ - Quero minha planilha de remuneração 💼💰 < Atenção a data dos arquivos
 5️⃣ - Consultar tarefas do PDV 📋🔍
 6️⃣ - Consultar a lista de telefones úteis Tarumã 📞🏢
 7️⃣ - Consultar Coleta TTC do PDV 📈🏪
