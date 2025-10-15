@@ -102,7 +102,7 @@ module.exports = async (client, message) => {
                 const skusDetalhes = [];
                 let totalSKUs = 0;
                 let totalAderido = 0;
-                let dataMaisRecente = null; // <-- ADICIONADO: Variável para guardar a data mais recente
+                let dataMaisRecente = null; 
 
                 aba.eachRow((row, rowNumber) => {
                     if (rowNumber === 1) return;
@@ -112,6 +112,7 @@ module.exports = async (client, message) => {
                     if (codPdvPlanilha === codigoPDV) {
                         totalSKUs++;
 
+                        // Colunas HEADER (1 a 5)
                         if (!pdvInfo) {
                             pdvInfo = {
                                 codUnb: getCellValueAsString(row.getCell(1)),
@@ -122,7 +123,7 @@ module.exports = async (client, message) => {
                             };
                         }
 
-                        // --- Lógica para encontrar a data mais recente --- // <-- ADICIONADO
+                        // Lógica para encontrar a data mais recente (Coluna 11)
                         const valorDataColeta = row.getCell(11).value;
                         let dataAtualDaLinha = null;
 
@@ -136,37 +137,46 @@ module.exports = async (client, message) => {
                         if (dataAtualDaLinha && (!dataMaisRecente || dataAtualDaLinha > dataMaisRecente)) {
                             dataMaisRecente = dataAtualDaLinha;
                         }
-                        // --- Fim da lógica da data ---
-
+                        
+                        // Colunas de LINHA (6 a 15)
                         const ttcAderido = parseFloat(row.getCell(8).value) || 0;
                         const ttcColetado = parseFloat(row.getCell(9).value) || 0;
                         const situacao = getCellValueAsString(row.getCell(10));
+                        const tipoColeta = getCellValueAsString(row.getCell(12)); // Coluna 12
+                        const dataVigencia = row.getCell(13).value; // Coluna 13
+                        const falsoFoco = getCellValueAsString(row.getCell(14)); // Coluna 14
+                        const periodoBonus = getCellValueAsString(row.getCell(15)); // Coluna 15
+                        
                         const difTTC = ttcColetado - ttcAderido;
 
                         if (situacao.toUpperCase() === 'ADERIDO') {
                             totalAderido++;
                         }
 
-                    // Adiciona um emoji com base na situação
-                    const emojiSituacao = situacao.toUpperCase() === 'ADERIDO' ? '✅' : '❌';
+                        // Adiciona um emoji com base na situação
+                        const emojiSituacao = situacao.toUpperCase() === 'ADERIDO' ? '✅' : '❌';
 
-                    skusDetalhes.push(
-                        `*SKU:* ${getCellValueAsString(row.getCell(6))} - ${getCellValueAsString(row.getCell(7))}\n` +
-                        `📈 *TTC Aderido:* ${formatarMoeda(ttcAderido)}\n` +
-                        `📥 *TTC Coletado:* ${formatarMoeda(ttcColetado)}\n` +
-                        `📊 *Diferença:* ${formatarMoeda(difTTC)}\n` +
-                        `📌 *Situação:* ${emojiSituacao} ${situacao}\n` + // <-- LINHA ALTERADA
-                        `🗓️ *Data Coleta:* ${formatarData(valorDataColeta)}`
-                    );
+                        skusDetalhes.push(
+                            `*SKU:* ${getCellValueAsString(row.getCell(6))} - ${getCellValueAsString(row.getCell(7))}\n` +
+                            `📈 *TTC Aderido:* ${formatarMoeda(ttcAderido)}\n` +
+                            `📥 *TTC Coletado:* ${formatarMoeda(ttcColetado)}\n` +
+                            `📊 *Diferença:* ${formatarMoeda(difTTC)}\n` +
+                            `📌 *Situação:* ${emojiSituacao} ${situacao}\n` +
+                            `🗓️ *Data Coleta:* ${formatarData(valorDataColeta)}\n` +
+                            `🏷️ *Tipo Coleta:* ${tipoColeta}\n` + // Coluna 12
+                            `📅 *Data Vigência:* ${formatarData(dataVigencia)}\n` + // Coluna 13
+                            `⚠️ *Falso Foco:* ${falsoFoco}\n` + // Coluna 14
+                            `💰 *Período Bônus:* ${periodoBonus}` // Coluna 15
+                        );
                     }
                 });
 
                 if (totalSKUs > 0) {
-                    // --- Lógica para calcular os dias desde a última coleta --- // <-- ADICIONADO
+                    // Lógica para calcular os dias desde a última coleta
                     let diasDesdeUltimaColeta = 'N/A';
                     if (dataMaisRecente) {
                         const hoje = new Date();
-                        hoje.setHours(0, 0, 0, 0); // Zera a hora para comparar apenas o dia
+                        hoje.setHours(0, 0, 0, 0); 
                         dataMaisRecente.setHours(0, 0, 0, 0);
 
                         const diffEmMilissegundos = hoje.getTime() - dataMaisRecente.getTime();
@@ -180,12 +190,11 @@ module.exports = async (client, message) => {
                             diasDesdeUltimaColeta = `${diffEmDias} dias atrás`;
                         }
                     }
-                    // --- Fim do cálculo de dias ---
-
+                    
                     const percentualAderido = totalSKUs > 0 ? Math.round((totalAderido / totalSKUs) * 100) : 0;
                     const barra = gerarBarraProgresso(percentualAderido);
 
-                    // <-- ALTERADO: Adicionada a nova linha no cabeçalho -->
+                    // Cabeçalho com as informações do PDV (Colunas 1 a 5 + Última Coleta)
                     const header = `📋 *Relatório de Coleta TTC para o PDV ${pdvInfo.codPdv}*\n\n` +
                         `🏪 *PDV:* ${pdvInfo.nomePdv}\n` +
                         `🏢 *UNB:* ${pdvInfo.codUnb}\n` +
@@ -193,11 +202,13 @@ module.exports = async (client, message) => {
                         `🔄 *Frequência:* ${pdvInfo.frequencia}\n` +
                         `⏳ *Última Coleta:* ${diasDesdeUltimaColeta}\n`;
 
+                    // Resumo
                     const summary = `\n📊 *Resumo Geral:*\n` +
                         `*Total de SKUs:* ${totalSKUs}\n` +
                         `*SKUs Aderidos:* ${totalAderido}\n` +
                         `*Aderência:* ${percentualAderido}% ${barra}\n`;
 
+                    // Detalhes dos SKUs (Colunas 6 a 15)
                     const body = `\n📦 *Detalhes dos SKUs:*\n\n${skusDetalhes.join('\n\n')}`;
 
                     const resposta = header + summary + body;

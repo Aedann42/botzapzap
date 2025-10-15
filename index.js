@@ -20,6 +20,9 @@ const enviarListaContatos = require('./src/handlers/enviarListaContatos');
 const enviarMenuAtivacao = require('./src/handlers/AtivacaoRepresentantes.js');
 const enviarColetaTtcPdv = require('./src/handlers/enviarColetaTtcPdv');
 const enviarCts = require('./src/handlers/enviarCts');
+// <-- ALTERAÇÃO 1: Importação da nova função -->
+const enviarGiroEquipamentosPdv = require('./src/handlers/enviarGiroEquipamentosPdv');
+
 
 let atendidos = lerJson(ATENDIDOS_PATH, []);
 const staffs = lerJson(STAFFS_PATH, []);
@@ -193,6 +196,16 @@ async function processUserMessage(message) {
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
                 return;
             }
+            
+            // <-- ALTERAÇÃO 2: Adiciona a lógica para a nova etapa -->
+            if (etapaAtual === 'giro_equipamentos') {
+                await enviarGiroEquipamentosPdv(client, message);
+                await registrarUso(numero, 'Consulta de Giro de Equipamentos PDV');
+                delete etapas[numero];
+                fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+                return;
+            }
+
 
             if (etapaAtual === 'remuneracao') {
                 await enviarRemuneracao(client, message);
@@ -278,6 +291,15 @@ async function processUserMessage(message) {
         case '8': {
             await enviarCts(client, message, representante);
             await registrarUso(numero, 'Consulta de Bonificação CT por Setor');
+            break;
+        }
+        // <-- ALTERAÇÃO 3: Adiciona o case para a nova opção do menu -->
+        case '9': {
+            await client.sendMessage(message.from, 'Por favor, envie o código do PDV que deseja consultar o *Giro de Equipamentos*! (Apenas números)');
+            etapas[numero] = { etapa: 'giro_equipamentos' };
+            await client.sendSeen(numero);
+            fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+            if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
         }
         case 'menu':

@@ -10,6 +10,7 @@ const MENU_TEXT = `
 6️⃣ - Consultar a lista de telefones úteis Tarumã 📞🏢
 7️⃣ - Consultar Coleta TTC do PDV 📈🏪
 8️⃣ - Consultar Bonificação (CT) 🎁
+9️⃣ - Consultar Giro de Equipamentos do PDV 🔄🏪
 
 Digite *MENU* a qualquer momento para receber novamente essa mensagem
 `;
