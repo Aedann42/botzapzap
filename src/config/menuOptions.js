@@ -5,12 +5,12 @@ const MENU_TEXT = `
 1️⃣ - Quero meus relatórios em PDF 📄✨
 2️⃣ - Quero meus relatórios em imagens 🖼️🎨
 3️⃣ - Preciso de ajuda do APR para demais assuntos 💬🤔
-4️⃣ - Quero minha planilha de remuneração 💼💰 < Atenção a data dos arquivos
+4️⃣ - Quero minha planilha de remuneração 💼💰 
 5️⃣ - Consultar tarefas do PDV 📋🔍
 6️⃣ - Consultar a lista de telefones úteis Tarumã 📞🏢
 7️⃣ - Consultar Coleta TTC do PDV 📈🏪
-8️⃣ - Consultar Bonificação (CT) 🎁
-9️⃣ - Consultar Giro de Equipamentos do PDV 🔄🏪
+8️⃣ - Consultar Bonificação do setor (CT) 🎁
+9️⃣ - Consultar Giro de Equipamentos do PDV 🔄🏪 <<<< NOVA FUNÇÃO
 
 Digite *MENU* a qualquer momento para receber novamente essa mensagem
 `;

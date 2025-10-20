@@ -62,8 +62,8 @@ async function processNextRemuneracaoRequest() {
             const caminhoCompletoArquivo = path.join(diretorioPath, nomeArquivo);
             
             // Ignora arquivos temporários ou de sistema, se necessário
-            if (nomeArquivo.startsWith('~') || nomeArquivo.startsWith('.')) {
-                console.log(`[Remuneração Fila] Ignorando arquivo temporário: ${nomeArquivo}`);
+            if (nomeArquivo.startsWith('~') || nomeArquivo.startsWith('.')|| nomeArquivo.toLowerCase() ==='thumbs.db') {
+                console.log(`[Remuneração Fila] Ignorando arquivos temporários: ${nomeArquivo}`);
                 continue; // Pula para o próximo arquivo
             }
 
