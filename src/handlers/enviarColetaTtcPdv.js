@@ -2,6 +2,17 @@
 const ExcelJS = require('exceljs');
 const path = require('path');
 
+// Importa o seu módulo de manipulação de dados (Assumindo que está em '../utils/dataHandler')
+const dataHandler = require('../utils/dataHandler'); 
+
+// --- Constantes de Configuração ---
+const UNB_SETOR_4 = '1046853';
+const UNB_OUTROS_SETOR = '296708';
+const CAMINHO_ARQUIVO_EXCEL = path.join(
+    '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\10 - OUTUBRO\\_GERADOR PDF',
+    'Acomp Coleta TTC.xlsx'
+);
+
 // --- Funções Auxiliares ---
 
 function formatarMoeda(valor) {
@@ -34,10 +45,17 @@ function formatarData(valorCelula) {
 
 function getCellValueAsString(cell) {
     if (!cell || !cell.value) return '';
-    if (typeof cell.value === 'object' && cell.value.richText) {
-        return cell.value.richText.map(rt => rt.text).join('').trim();
+    const value = cell.value;
+    
+    if (typeof value === 'object') {
+        if (value.richText) {
+            return value.richText.map(rt => rt.text).join('').trim();
+        }
+        if (value instanceof Date) {
+             return value.toLocaleDateString('pt-BR');
+        }
     }
-    return String(cell.value).trim();
+    return String(value).trim();
 }
 
 function gerarBarraProgresso(percentual) {
@@ -45,9 +63,70 @@ function gerarBarraProgresso(percentual) {
     const blocosPreenchidos = Math.round((percentual / 100) * totalBlocos);
     return '▰'.repeat(blocosPreenchidos) + '▱'.repeat(totalBlocos - blocosPreenchidos);
 }
+
+/**
+ * Tenta encontrar o setor do usuário no REPRESENTANTES.JSON e, se falhar, em STAFFS.JSON.
+ * @param {string} telefoneDoUsuario - O telefone do usuário (e.g., message.from).
+ * @returns {{UNB: string, setor: string} | null} Objeto com a UNB de filtro e o setor, ou null.
+ */
+function buscarSetorEUNB(telefoneDoUsuario) {
+    
+    const telLimpoUsuario = telefoneDoUsuario.replace('@c.us', '').replace(/\D/g, ''); 
+    console.log(`[DEBUG] Telefone do Usuário (message.from limpo): ${telLimpoUsuario}`);
+
+    let usuarioEncontrado = null;
+    let fonte = 'Nenhum';
+
+    // 1. TENTA BUSCAR EM REPRESENTANTES.JSON
+    const representantes = dataHandler.lerJson(dataHandler.REPRESENTANTES_PATH, []); 
+    if (Array.isArray(representantes)) {
+        usuarioEncontrado = representantes.find(s => {
+            const telLimpoJson = String(s.telefone).replace(/\D/g, '');
+            return telLimpoJson === telLimpoUsuario;
+        });
+        if (usuarioEncontrado) {
+            fonte = 'Representantes';
+        }
+    }
+
+    // 2. SE NÃO ENCONTROU, TENTA BUSCAR EM STAFFS.JSON
+    if (!usuarioEncontrado) {
+        const staffs = dataHandler.lerJson(dataHandler.STAFFS_PATH, []); 
+        if (Array.isArray(staffs)) {
+            usuarioEncontrado = staffs.find(s => {
+                const telLimpoJson = String(s.telefone).replace(/\D/g, '');
+                return telLimpoJson === telLimpoUsuario;
+            });
+            if (usuarioEncontrado) {
+                fonte = 'Staffs';
+            }
+        }
+    }
+    
+    // 3. RETORNA RESULTADO
+    if (!usuarioEncontrado) {
+        console.log(`❌ Telefone limpo ${telLimpoUsuario} não encontrado em nenhum arquivo JSON.`);
+        return null;
+    }
+
+    const setor = String(usuarioEncontrado.setor).trim();
+    const primeiroDigitoSetor = setor[0];
+    let UNB_Filtro = '';
+
+    if (primeiroDigitoSetor === '4') {
+        UNB_Filtro = UNB_SETOR_4; // '1046853'
+    } else {
+        UNB_Filtro = UNB_OUTROS_SETOR; // '296708'
+    }
+    
+    console.log(`✅ Usuário encontrado em ${fonte}. Setor: ${setor}.`);
+
+    return { UNB: UNB_Filtro, setor: setor };
+}
 // --- Fim das Funções Auxiliares ---
 
-// --- Fila de requisições ---
+
+// --- Fila de requisições (Inalterada) ---
 let isProcessingExcel = false;
 const excelRequestQueue = [];
 
@@ -72,15 +151,26 @@ async function processNextExcelRequest() {
 module.exports = async (client, message) => {
     const codigoPDV = message.body.replace(/\D/g, '');
     console.log('🔍 Código PDV recebido do usuário:', codigoPDV);
+    
+    // 1. OBTENÇÃO DO FILTRO UNB
+    const dadosFiltro = buscarSetorEUNB(message.from);
 
-    const arquivo = path.join(
-        '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\10 - OUTUBRO\\_GERADOR PDF',
-        'Acomp Coleta TTC.xlsx'
-    );
+    if (!dadosFiltro) {
+        await client.sendMessage(message.from, '❌ Não foi possível identificar seu Setor. Seu telefone não está cadastrado. Por favor, avise o APR.');
+        return;
+    }
+
+    const UNB_Filtro = dadosFiltro.UNB;
+    const setorDoUsuario = dadosFiltro.setor;
+    console.log(`✅ Setor do Usuário: ${setorDoUsuario}. UNB de Filtro: ${UNB_Filtro}.`);
+
+    // ----------------------------------------------------------------------
+
+    const arquivo = CAMINHO_ARQUIVO_EXCEL;
 
     await client.sendMessage(
         message.from,
-        `⏳ Buscando dados de coleta para o PDV *${codigoPDV}*... um momento.`
+        `⏳ Buscando dados de coleta para o PDV *${codigoPDV}* (Filtro UNB: ${UNB_Filtro})... um momento.`
     );
 
     return new Promise(async (resolve, reject) => {
@@ -107,15 +197,17 @@ module.exports = async (client, message) => {
                 aba.eachRow((row, rowNumber) => {
                     if (rowNumber === 1) return;
 
-                    const codPdvPlanilha = getCellValueAsString(row.getCell(2));
-
-                    if (codPdvPlanilha === codigoPDV) {
+                    const codPdvPlanilha = getCellValueAsString(row.getCell(2)); // Coluna B
+                    const codUnbPlanilha = getCellValueAsString(row.getCell(1)); // Coluna A (Nova Coluna para o filtro)
+                    
+                    // APLICAÇÃO DO FILTRO COMBINADO: PDV (Coluna B) E UNB (Coluna A)
+                    if (codPdvPlanilha === codigoPDV && codUnbPlanilha === UNB_Filtro) {
                         totalSKUs++;
 
                         // Colunas HEADER (1 a 5)
                         if (!pdvInfo) {
                             pdvInfo = {
-                                codUnb: getCellValueAsString(row.getCell(1)),
+                                codUnb: codUnbPlanilha, // Usando a Coluna 1 (A)
                                 codPdv: codPdvPlanilha,
                                 nomePdv: getCellValueAsString(row.getCell(3)),
                                 codSetor: getCellValueAsString(row.getCell(4)),
@@ -142,10 +234,10 @@ module.exports = async (client, message) => {
                         const ttcAderido = parseFloat(row.getCell(8).value) || 0;
                         const ttcColetado = parseFloat(row.getCell(9).value) || 0;
                         const situacao = getCellValueAsString(row.getCell(10));
-                        const tipoColeta = getCellValueAsString(row.getCell(12)); // Coluna 12
-                        const dataVigencia = row.getCell(13).value; // Coluna 13
-                        const falsoFoco = getCellValueAsString(row.getCell(14)); // Coluna 14
-                        const periodoBonus = getCellValueAsString(row.getCell(15)); // Coluna 15
+                        const tipoColeta = getCellValueAsString(row.getCell(12)); 
+                        const dataVigencia = row.getCell(13).value; 
+                        const falsoFoco = getCellValueAsString(row.getCell(14)); 
+                        const periodoBonus = getCellValueAsString(row.getCell(15)); 
                         
                         const difTTC = ttcColetado - ttcAderido;
 
@@ -163,10 +255,10 @@ module.exports = async (client, message) => {
                             `📊 *Diferença:* ${formatarMoeda(difTTC)}\n` +
                             `📌 *Situação:* ${emojiSituacao} ${situacao}\n` +
                             `🗓️ *Data Coleta:* ${formatarData(valorDataColeta)}\n` +
-                            `🏷️ *Tipo Coleta:* ${tipoColeta}\n` + // Coluna 12
-                            `📅 *Data Vigência:* ${formatarData(dataVigencia)}\n` + // Coluna 13
-                            `⚠️ *Falso Foco:* ${falsoFoco}\n` + // Coluna 14
-                            `💰 *Período Bônus:* ${periodoBonus}` // Coluna 15
+                            `🏷️ *Tipo Coleta:* ${tipoColeta}\n` + 
+                            `📅 *Data Vigência:* ${formatarData(dataVigencia)}\n` + 
+                            `⚠️ *Falso Foco:* ${falsoFoco}\n` + 
+                            `💰 *Período Bônus:* ${periodoBonus}` 
                         );
                     }
                 });
@@ -194,7 +286,7 @@ module.exports = async (client, message) => {
                     const percentualAderido = totalSKUs > 0 ? Math.round((totalAderido / totalSKUs) * 100) : 0;
                     const barra = gerarBarraProgresso(percentualAderido);
 
-                    // Cabeçalho com as informações do PDV (Colunas 1 a 5 + Última Coleta)
+                    // Cabeçalho com as informações do PDV
                     const header = `📋 *Relatório de Coleta TTC para o PDV ${pdvInfo.codPdv}*\n\n` +
                         `🏪 *PDV:* ${pdvInfo.nomePdv}\n` +
                         `🏢 *UNB:* ${pdvInfo.codUnb}\n` +
@@ -208,14 +300,14 @@ module.exports = async (client, message) => {
                         `*SKUs Aderidos:* ${totalAderido}\n` +
                         `*Aderência:* ${percentualAderido}% ${barra}\n`;
 
-                    // Detalhes dos SKUs (Colunas 6 a 15)
+                    // Detalhes dos SKUs
                     const body = `\n📦 *Detalhes dos SKUs:*\n\n${skusDetalhes.join('\n\n')}`;
 
                     const resposta = header + summary + body;
                     await client.sendMessage(message.from, resposta);
 
                 } else {
-                    await client.sendMessage(message.from, `⚠️ Nenhum dado de coleta encontrado para o PDV *${codigoPDV}*. Verifique o código e tente novamente.`);
+                    await client.sendMessage(message.from, `⚠️ Nenhum dado de coleta encontrado para o PDV *${codigoPDV}* e UNB *${UNB_Filtro}*. Verifique o código e tente novamente.`);
                 }
                 resolve();
 

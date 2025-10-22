@@ -2,6 +2,17 @@
 const ExcelJS = require('exceljs');
 const path = require('path');
 
+// Importa o seu módulo de manipulação de dados
+const dataHandler = require('../utils/dataHandler'); // Caminho relativo
+
+// --- Constantes de Configuração ---
+const UNB_SETOR_4 = '1046853';
+const UNB_OUTROS_SETOR = '296708';
+const CAMINHO_ARQUIVO_EXCEL = path.join(
+    '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\10 - OUTUBRO\\_GERADOR PDF',
+    'Acomp Giro de Equipamentos.xlsx'
+);
+
 // --- Funções Auxiliares ---
 
 function formatarMoeda(valor) {
@@ -34,10 +45,17 @@ function formatarData(valorCelula) {
 
 function getCellValueAsString(cell) {
     if (!cell || !cell.value) return '';
-    if (typeof cell.value === 'object' && cell.value.richText) {
-        return cell.value.richText.map(rt => rt.text).join('').trim();
+    const value = cell.value;
+    
+    if (typeof value === 'object') {
+        if (value.richText) {
+            return value.richText.map(rt => rt.text).join('').trim();
+        }
+        if (value instanceof Date) {
+             return value.toLocaleDateString('pt-BR');
+        }
     }
-    return String(cell.value).trim();
+    return String(value).trim();
 }
 
 function gerarBarraProgresso(percentual) {
@@ -45,9 +63,68 @@ function gerarBarraProgresso(percentual) {
     const blocosPreenchidos = Math.round((percentual / 100) * totalBlocos);
     return '▰'.repeat(blocosPreenchidos) + '▱'.repeat(totalBlocos - blocosPreenchidos);
 }
+
+/**
+ * Tenta encontrar o setor do usuário no REPRESENTANTES.JSON e, se falhar, em STAFFS.JSON.
+ * (Função copiada dos códigos anteriores, inalterada)
+ */
+function buscarSetorEUNB(telefoneDoUsuario) {
+    
+    const telLimpoUsuario = telefoneDoUsuario.replace('@c.us', '').replace(/\D/g, ''); 
+    console.log(`[DEBUG] Telefone do Usuário (message.from limpo): ${telLimpoUsuario}`);
+
+    let usuarioEncontrado = null;
+    let fonte = 'Nenhum';
+
+    // 1. TENTA BUSCAR EM REPRESENTANTES.JSON
+    const representantes = dataHandler.lerJson(dataHandler.REPRESENTANTES_PATH, []); 
+    if (Array.isArray(representantes)) {
+        usuarioEncontrado = representantes.find(s => {
+            const telLimpoJson = String(s.telefone).replace(/\D/g, '');
+            return telLimpoJson === telLimpoUsuario;
+        });
+        if (usuarioEncontrado) {
+            fonte = 'Representantes';
+        }
+    }
+
+    // 2. SE NÃO ENCONTROU, TENTA BUSCAR EM STAFFS.JSON
+    if (!usuarioEncontrado) {
+        const staffs = dataHandler.lerJson(dataHandler.STAFFS_PATH, []); 
+        if (Array.isArray(staffs)) {
+            usuarioEncontrado = staffs.find(s => {
+                const telLimpoJson = String(s.telefone).replace(/\D/g, '');
+                return telLimpoJson === telLimpoUsuario;
+            });
+            if (usuarioEncontrado) {
+                fonte = 'Staffs';
+            }
+        }
+    }
+    
+    // 3. RETORNA RESULTADO
+    if (!usuarioEncontrado) {
+        console.log(`❌ Telefone limpo ${telLimpoUsuario} não encontrado em nenhum arquivo JSON.`);
+        return null;
+    }
+
+    const setor = String(usuarioEncontrado.setor).trim();
+    const primeiroDigitoSetor = setor[0];
+    let UNB_Filtro = '';
+
+    if (primeiroDigitoSetor === '4') {
+        UNB_Filtro = UNB_SETOR_4; // '1046853'
+    } else {
+        UNB_Filtro = UNB_OUTROS_SETOR; // '296708'
+    }
+    
+    console.log(`✅ Usuário encontrado em ${fonte}. Setor: ${setor}.`);
+
+    return { UNB: UNB_Filtro, setor: setor };
+}
 // --- Fim das Funções Auxiliares ---
 
-// --- Fila de requisições ---
+// --- Fila de requisições (Inalterada) ---
 let isProcessingExcel = false;
 const excelRequestQueue = [];
 
@@ -72,16 +149,29 @@ async function processNextExcelRequest() {
 module.exports = async (client, message) => {
     const codigoPDV = message.body.replace(/\D/g, '');
     console.log('🔍 Código PDV recebido do usuário:', codigoPDV);
+    
+    // 1. OBTENÇÃO DO FILTRO UNB
+    const dadosFiltro = buscarSetorEUNB(message.from);
 
-    // !!! ATENÇÃO: Verifique se este é o caminho e nome correto da sua planilha de giro !!!
-    const arquivo = path.join(
-        '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\10 - OUTUBRO\\_GERADOR PDF',
-        'Acomp Giro de Equipamentos.xlsx' // <<<--- NOME DO ARQUIVO ATUALIZADO
-    );
+    if (!dadosFiltro) {
+        await client.sendMessage(message.from, '❌ Não foi possível identificar seu Setor. Seu telefone não está cadastrado. Por favor, avise o APR.');
+        return;
+    }
+
+    const UNB_Filtro = dadosFiltro.UNB;
+    const setorDoUsuario = dadosFiltro.setor;
+    
+    // 2. CRIAÇÃO DA CHAVE DE BUSCA COMBINADA
+    const CHAVE_BUSCA = `${UNB_Filtro}_${codigoPDV}`;
+    console.log(`✅ Chave de Busca Final (UNB_PDV): ${CHAVE_BUSCA}`);
+
+    // ----------------------------------------------------------------------
+
+    const arquivo = CAMINHO_ARQUIVO_EXCEL;
 
     await client.sendMessage(
         message.from,
-        `⏳ Buscando dados de giro de equipamentos para o PDV *${codigoPDV}*... um momento.`
+        `⏳ Buscando dados de giro de equipamentos para o PDV *${codigoPDV}* (Chave: ${CHAVE_BUSCA})... um momento.`
     );
 
     return new Promise(async (resolve, reject) => {
@@ -101,22 +191,26 @@ module.exports = async (client, message) => {
 
                 let pdvRow = null;
 
-                // Itera nas linhas para encontrar o PDV correspondente
+                // Itera nas linhas para encontrar a CHAVE DE BUSCA correspondente
                 aba.eachRow((row, rowNumber) => {
                     if (rowNumber > 1) { // Pula o cabeçalho
-                        const codPdvPlanilha = getCellValueAsString(row.getCell('B')); // Coluna "N BASE"
-                        if (codPdvPlanilha === codigoPDV) {
+                        // Coluna 'A' contém a chave UNB_PDV (ex: 296708_5)
+                        const chavePlanilha = getCellValueAsString(row.getCell('A')); 
+                        
+                        // --- NOVA CONDIÇÃO DE FILTRO: CHAVE COMPLETA ---
+                        if (chavePlanilha === CHAVE_BUSCA) {
                             pdvRow = row;
-                            return false; // Para a iteração assim que encontra o PDV
+                            return false; // Para a iteração assim que encontra
                         }
                     }
                 });
 
                 if (pdvRow) {
                     // --- Extração dos Dados do PDV ---
+                    // NOTA: A coluna 'B' agora representa o PDV, 'A' a Chave
                     const headerInfo = {
                         chave: getCellValueAsString(pdvRow.getCell('A')),
-                        nBase: getCellValueAsString(pdvRow.getCell('B')),
+                        nBase: getCellValueAsString(pdvRow.getCell('B')), // Coluna B: N BASE
                         razaoSocial: getCellValueAsString(pdvRow.getCell('C')),
                         gv: getCellValueAsString(pdvRow.getCell('D')),
                         rn: getCellValueAsString(pdvRow.getCell('E')),
@@ -147,48 +241,46 @@ module.exports = async (client, message) => {
 
                     // --- Montagem da Mensagem de Resposta ---
                     const header = `📋 *Giro de Equipamentos - PDV ${headerInfo.nBase}*\n\n` +
+                                 `🏢 *Chave (UNB_PDV):* ${headerInfo.chave}\n` + // Adiciona a chave
                                  `🏪 *PDV:* ${headerInfo.razaoSocial}\n` +
                                  `👨‍💼 *GV:* ${headerInfo.gv} | *RN:* ${headerInfo.rn}\n` +
                                  `🗓️ *Última Visita:* ${formatarData(headerInfo.visita)}\n` +
                                  `---`;
 
                     let sopiBody = '';
-                    // Condição para exibir o bloco SOPI: só mostra se houver meta ou venda real
                     if (sopiInfo.meta > 0 || sopiInfo.real > 0) {
                         sopiBody = `\n🍺 *SOPI (Cerveja)*\n` +
-                                   `*Meta:* ${formatarMoeda(sopiInfo.meta)}\n` +
-                                   `*Real:* ${formatarMoeda(sopiInfo.real)}\n` +
-                                   `*Gap:* ${formatarMoeda(sopiInfo.gap)}\n` +
-                                   `*Giro OK?* ${sopiInfo.giroOk}\n` +
-                                   `*Venda Zero?* ${sopiInfo.vendaZero}\n` +
-                                   `---`;
+                                 `*Meta:* ${formatarMoeda(sopiInfo.meta)}\n` +
+                                 `*Real:* ${formatarMoeda(sopiInfo.real)}\n` +
+                                 `*Gap:* ${formatarMoeda(sopiInfo.gap)}\n` +
+                                 `*Giro OK?* ${sopiInfo.giroOk}\n` +
+                                 `*Venda Zero?* ${sopiInfo.vendaZero}\n` +
+                                 `---`;
                     }
 
                     let visaBody = '';
-                    // Condição para exibir o bloco VISA: só mostra se houver meta ou venda real
                     if (visaInfo.meta > 0 || visaInfo.real > 0) {
                         visaBody = `\n🥤 *VISA*\n` +
-                                   `*Meta:* ${formatarMoeda(visaInfo.meta)}\n` +
-                                   `*Real:* ${formatarMoeda(visaInfo.real)}\n` +
-                                   `*Gap:* ${formatarMoeda(visaInfo.gap)}\n` +
-                                   `*Giro OK?* ${visaInfo.giroOk}\n` +
-                                   `*Venda Zero?* ${visaInfo.vendaZero}\n` +
-                                   `---`;
+                                 `*Meta:* ${formatarMoeda(visaInfo.meta)}\n` +
+                                 `*Real:* ${formatarMoeda(visaInfo.real)}\n` +
+                                 `*Gap:* ${formatarMoeda(visaInfo.gap)}\n` +
+                                 `*Giro OK?* ${visaInfo.giroOk}\n` +
+                                 `*Venda Zero?* ${visaInfo.vendaZero}\n` +
+                                 `---`;
                     }
                     
-                    // O valor na planilha para percentual deve ser um número (ex: 0.85 para 85%)
                     const percentualFormatado = sopivInfo.percentualGiro * 100;
                     const barra = gerarBarraProgresso(percentualFormatado);
                     const summary = `\n📈 *Resumo SOPIV (Total)*\n` +
-                                  `*Giro OK?* ${sopivInfo.giroOk}\n` +
-                                  `*Venda Zero?* ${sopivInfo.vendaZero}\n` +
-                                  `*% Giro Atingido:* ${percentualFormatado.toFixed(0)}% ${barra}`;
+                                     `*Giro OK?* ${sopivInfo.giroOk}\n` +
+                                     `*Venda Zero?* ${sopivInfo.vendaZero}\n` +
+                                     `*% Giro Atingido:* ${percentualFormatado.toFixed(0)}% ${barra}`;
 
                     const resposta = header + sopiBody + visaBody + summary;
                     await client.sendMessage(message.from, resposta);
 
                 } else {
-                    await client.sendMessage(message.from, `⚠️ Nenhum dado de giro de equipamento encontrado para o PDV *${codigoPDV}*. Verifique o código e tente novamente.`);
+                    await client.sendMessage(message.from, `⚠️ Nenhum dado de giro de equipamento encontrado para o PDV *${codigoPDV}* com a chave *${CHAVE_BUSCA}*. Verifique se o código está correto ou se há dados para seu UNB.`);
                 }
                 resolve();
 
