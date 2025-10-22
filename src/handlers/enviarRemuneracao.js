@@ -55,7 +55,7 @@ async function processNextRemuneracaoRequest() {
             return; // Finaliza o processamento para este usuário
         }
 
-        await client.sendMessage(numero, `🔄 Encontrei !!! 🏋️. Preparando para envio, aguarde ⏰...`);
+        await client.sendMessage(numero, `🔄 Encontrei !!! 🏋️ Preparando para envio, aguarde ⏰...`);
 
         // 4. Faz um loop e envia CADA arquivo encontrado
         for (const nomeArquivo of arquivos) {

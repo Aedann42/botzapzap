@@ -3,6 +3,9 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
+// Importação do node-cron
+const cron = require('node-cron'); // <-- NOVO: Importa o agendador
+
 const verificarArquivoAtualizado = require('./src/services/checkDateReports.js');
 const { lerJson, registrarUso, REPRESENTANTES_PATH, ETAPAS_PATH, ATENDIDOS_PATH, STAFFS_PATH } = require('./src/utils/dataHandler.js');
 const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\10 - OUTUBRO\\_GERADOR PDF\\ACOMPS\\410\\410_MKTPTT.pdf';
@@ -20,8 +23,8 @@ const enviarListaContatos = require('./src/handlers/enviarListaContatos');
 const enviarMenuAtivacao = require('./src/handlers/AtivacaoRepresentantes.js');
 const enviarColetaTtcPdv = require('./src/handlers/enviarColetaTtcPdv');
 const enviarCts = require('./src/handlers/enviarCts');
-// <-- ALTERAÇÃO 1: Importação da nova função -->
 const enviarGiroEquipamentosPdv = require('./src/handlers/enviarGiroEquipamentosPdv');
+const lembretePonto = require('./src/handlers/lembretePonto'); // <-- NOVO: Handler do Lembrete
 
 
 let atendidos = lerJson(ATENDIDOS_PATH, []);
@@ -44,58 +47,97 @@ client.on('qr', qr => qrcode.generate(qr, { small: true }));
 client.on('ready', () => {
     console.log('✅ Bot conectado!');
     
+    // ============================================================================================
+    // === AGENDAMENTO NODE-CRON PARA LEMBRETES DE PONTO ===
+    // ============================================================================================
+    const TIMEZONE = "America/Sao_Paulo"; // Defina o fuso horário correto
+    
+    console.log('[AGENDADOR]: Configurando lembretes de ponto...');
+
+    // 1. 7:55 - Início da jornada
+    cron.schedule('55 7 * * 1-5', () => { // De Segunda a Sexta
+        lembretePonto(client, '7:55');
+    }, {
+        timezone: TIMEZONE
+    });
+
+    // 2. 12:00 - Saída para almoço
+    cron.schedule('0 12 * * 1-5', () => { 
+        lembretePonto(client, '12:00');
+    }, {
+        timezone: TIMEZONE
+    });
+
+    // 3. 13:00 - Retorno do Almoço
+    cron.schedule('0 13 * * 1-5', () => {
+        lembretePonto(client, '13:00');
+    }, {
+        timezone: TIMEZONE
+    });
+
+    // 4. 17:45 - Encerramento da jornada
+    cron.schedule('45 17 * * 1-5', () => {
+        lembretePonto(client, '17:45');
+    }, {
+        timezone: TIMEZONE
+    });
+    
+    console.log('[AGENDADOR]: Agendamentos de ponto configurados com sucesso.');
+    // ============================================================================================
+    
+    
     const INTERVALO_VERIFICACAO = 3 * 60 * 1000;
 
-setInterval(async () => {
-    // Agora verificamos o tamanho do objeto com Object.keys
-    if (Object.keys(usuariosAguardandoRelatorio).length === 0) {
-        return;
-    }
-
-    console.log(`[VERIFICADOR]: Checando relatórios para ${Object.keys(usuariosAguardandoRelatorio).length} usuários em espera...`);
-
-    try {
-        // 1. Checa o status de AMBOS os tipos de relatório
-        const pdfPronto = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
-        const imagemPronta = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
-
-        // Se nenhum relatório estiver pronto, não faz nada
-        if (!pdfPronto && !imagemPronta) {
-            console.log('[VERIFICADOR]: Nenhum relatório disponível ainda.');
+    setInterval(async () => {
+        // Agora verificamos o tamanho do objeto com Object.keys
+        if (Object.keys(usuariosAguardandoRelatorio).length === 0) {
             return;
         }
 
-        const notificados = []; // Lista para armazenar quem foi notificado
+        console.log(`[VERIFICADOR]: Checando relatórios para ${Object.keys(usuariosAguardandoRelatorio).length} usuários em espera...`);
 
-        // 2. Itera sobre o objeto de usuários em espera
-        for (const userNumero in usuariosAguardandoRelatorio) {
-            const tipoEsperado = usuariosAguardandoRelatorio[userNumero];
+        try {
+            // 1. Checa o status de AMBOS os tipos de relatório
+            const pdfPronto = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
+            const imagemPronta = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
 
-            // 3. Verifica se o relatório esperado pelo usuário está pronto
-            if (tipoEsperado === 'pdf' && pdfPronto) {
-                console.log(`[VERIFICADOR]: PDF pronto para ${userNumero}. Notificando...`);
-                await client.sendMessage(userNumero, "🎉 Boa notícia! Seu relatório em PDF já está disponível.");
-                notificados.push(userNumero); // Adiciona à lista para remoção
-            } else if (tipoEsperado === 'imagem' && imagemPronta) {
-                console.log(`[VERIFICADOR]: Imagem pronta para ${userNumero}. Notificando...`);
-                await client.sendMessage(userNumero, "🎉 Boa notícia! Seu relatório em Imagem já está disponível.");
-                notificados.push(userNumero); // Adiciona à lista para remoção
+            // Se nenhum relatório estiver pronto, não faz nada
+            if (!pdfPronto && !imagemPronta) {
+                console.log('[VERIFICADOR]: Nenhum relatório disponível ainda.');
+                return;
             }
+
+            const notificados = []; // Lista para armazenar quem foi notificado
+
+            // 2. Itera sobre o objeto de usuários em espera
+            for (const userNumero in usuariosAguardandoRelatorio) {
+                const tipoEsperado = usuariosAguardandoRelatorio[userNumero];
+
+                // 3. Verifica se o relatório esperado pelo usuário está pronto
+                if (tipoEsperado === 'pdf' && pdfPronto) {
+                    console.log(`[VERIFICADOR]: PDF pronto para ${userNumero}. Notificando...`);
+                    await client.sendMessage(userNumero, "🎉 Boa notícia! Seu relatório em PDF já está disponível.");
+                    notificados.push(userNumero); // Adiciona à lista para remoção
+                } else if (tipoEsperado === 'imagem' && imagemPronta) {
+                    console.log(`[VERIFICADOR]: Imagem pronta para ${userNumero}. Notificando...`);
+                    await client.sendMessage(userNumero, "🎉 Boa notícia! Seu relatório em Imagem já está disponível.");
+                    notificados.push(userNumero); // Adiciona à lista para remoção
+                }
+            }
+
+            // 4. Remove APENAS os usuários que foram notificados da lista de espera
+            if (notificados.length > 0) {
+                for (const userNumero of notificados) {
+                    delete usuariosAguardandoRelatorio[userNumero];
+                }
+                console.log(`[VERIFICADOR]: ${notificados.length} usuários notificados e removidos da lista.`);
+            }
+
+        } catch (error) {
+            console.error('[VERIFICADOR]: Erro ao checar arquivos:', error);
         }
 
-        // 4. Remove APENAS os usuários que foram notificados da lista de espera
-        if (notificados.length > 0) {
-            for (const userNumero of notificados) {
-                delete usuariosAguardandoRelatorio[userNumero];
-            }
-            console.log(`[VERIFICADOR]: ${notificados.length} usuários notificados e removidos da lista.`);
-        }
-
-    } catch (error) {
-        console.error('[VERIFICADOR]: Erro ao checar arquivos:', error);
-    }
-
-}, INTERVALO_VERIFICACAO);
+    }, INTERVALO_VERIFICACAO);
 });
 
 // ============================================================================================
@@ -197,7 +239,6 @@ async function processUserMessage(message) {
                 return;
             }
             
-            // <-- ALTERAÇÃO 2: Adiciona a lógica para a nova etapa -->
             if (etapaAtual === 'giro_equipamentos') {
                 await enviarGiroEquipamentosPdv(client, message);
                 await registrarUso(numero, 'Consulta de Giro de Equipamentos PDV');
@@ -226,7 +267,7 @@ async function processUserMessage(message) {
         }
     }
 
-    const MENSAGEM_RELATORIOS_INDISPONIVEIS = '⚠️  Relatórios ainda não gerados. Vou te avisar assim que estiverem disponíveis! 🤖';
+    const MENSAGEM_RELATORIOS_INDISPONIVEIS = '⚠️  Relatórios ainda não gerados. Vou te avisar assim que estiverem disponíveis! 🤖';
 
     switch (opcao.toLowerCase()) {
         case '1': { 
@@ -293,7 +334,6 @@ async function processUserMessage(message) {
             await registrarUso(numero, 'Consulta de Bonificação CT por Setor');
             break;
         }
-        // <-- ALTERAÇÃO 3: Adiciona o case para a nova opção do menu -->
         case '9': {
             await client.sendMessage(message.from, 'Por favor, envie o código do PDV que deseja consultar o *Giro de Equipamentos*! (Apenas números)');
             etapas[numero] = { etapa: 'giro_equipamentos' };
