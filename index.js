@@ -1,3 +1,5 @@
+// index.js
+
 // --- Importações Originais ---
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
@@ -144,6 +146,22 @@ client.on('ready', () => {
 // === LISTENER PARA COMANDOS DO OPERADOR (VIA WHATSAPP WEB) ===
 // ============================================================================================
 client.on('message_create', async (message) => {
+    // Bloco de DEBUG para encontrar IDs de Grupo
+    // COMENTE/REMOVA ESTE BLOCO APÓS PEGAR OS IDs!
+    // if (message.from.endsWith('@g.us') && message.body && !message.fromMe) {
+    //     try {
+    //         const chat = await message.getChat();
+    //         console.log("==================================================");
+    //         console.log(`[DEBUG ID GRUPO] ID: ${message.from}`);
+    //         console.log(`[DEBUG ID GRUPO] Nome: ${chat.name}`);
+    //         console.log(`[DEBUG ID GRUPO] Mensagem de Teste: ${message.body}`);
+    //         console.log("==================================================");
+    //     } catch (error) {
+    //         console.log(`[DEBUG ID GRUPO] ID: ${message.from} (Erro ao obter nome)`);
+    //     }
+    // }
+    // Fim do bloco de DEBUG
+    
     if (!message.fromMe) {
         return;
     }
@@ -267,7 +285,7 @@ async function processUserMessage(message) {
         }
     }
 
-    const MENSAGEM_RELATORIOS_INDISPONIVEIS = '⚠️  Relatórios ainda não gerados. Vou te avisar assim que estiverem disponíveis! 🤖';
+    const MENSAGEM_RELATORIOS_INDISPONIVEIS = '⚠️  Relatórios ainda não gerados. Vou te avisar assim que estiverem disponíveis! 🤖';
 
     switch (opcao.toLowerCase()) {
         case '1': { 
@@ -374,6 +392,7 @@ async function processUserMessage(message) {
 client.on('message', async message => {
     if (message.from.endsWith('@g.us')) {
         const chat = await message.getChat();
+        // Não usar o isMention aqui se você quiser o comportamento original
         const isMention = message.mentionedIds && message.mentionedIds.includes(client.info.wid._serialized);
         if (!isMention) {
             await chat.sendSeen();
