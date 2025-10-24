@@ -38,6 +38,9 @@ const client = new Client({
     authStrategy: new LocalAuth({
         dataPath: '.session'
     }),
+    // 💡 SOLUÇÃO: Define o webCacheType para forçar o recarregamento do código web correto
+    // Se 'local' der problema, tente 'remote'
+    webCacheType: 'remote', 
     puppeteer: {
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox']
