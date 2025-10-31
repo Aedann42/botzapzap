@@ -118,3 +118,55 @@ A seguir, um resumo da jornada de desenvolvimento do projeto, mostrando a evolu�
   - Lógica de captura do código do PDV foi aprimorada.
 - **Corrigido:**
   - A campanha `/ativar` agora adiciona corretamente os usuários contatados ao `atendidos.json`, evitando que sejam notificados em looping.
+
+[1.2.1] - 2025-09-16 
+
+Alterado:
+
+Lógica de Ativação: O comando /ativar agora verifica se o representante usou alguma função nos últimos 7 dias (puxando do log), em vez de depender do arquivo de atendidos que era zerado diariamente.
+
+[1.2.2] - 2025-09-26 
+
+Adicionado:
+
+Nova função de Consulta de Coleta TTC PDV.
+
+Nova função de Conferir CT.
+
+Adicionados os staffs para pular a etapa de saudação inicial.
+
+Corrigido:
+
+Mensagem de que o relatório ficou disponível.
+
+[1.2.3] - 2025-10-06 
+
+Alterado:
+
+Remuneração: A remuneração agora envia TODOS os arquivos presentes na pasta (ignorando arquivos temporários ou de sistema).
+
+Corrigido:
+
+Fila de Relatórios: Corrigido bug em que existia apenas uma fila para relatórios (PDF e Imagem), resolvendo a notificação incorreta: quem pedia imagem era notificado quando o PDF estava disponível.
+
+[1.2.4] - 2025-10-15 
+
+Adicionado:
+
+Nova função: Enviar o giro de equipamentos dos PDVs.
+
+[1.2.5] - 2025-10-22 
+
+Adicionado:
+
+Nova função de lembretePonto, solicitada por um gerente, com adição do node-cron.
+
+Alterado:
+
+Implementação de lógica para filtro para diferenciar a informação de acordo com a revenda do representante.
+
+[1.2.6] - 2025-10-24 
+
+Alterado:
+
+Login e Grupos: Alteração no método de login com atualização na library para poder enviar mensagem em grupos no novo formato do WhatsApp.

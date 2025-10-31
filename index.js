@@ -5,11 +5,11 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
-// Importação do node-cron
-const cron = require('node-cron'); // <-- NOVO: Importa o agendador
+const cron = require('node-cron');
 
 const verificarArquivoAtualizado = require('./src/services/checkDateReports.js');
 const { lerJson, registrarUso, REPRESENTANTES_PATH, ETAPAS_PATH, ATENDIDOS_PATH, STAFFS_PATH } = require('./src/utils/dataHandler.js');
+// IMPORTANTE: Estes caminhos devem ser acessíveis (leitura) pelo servidor onde o bot está rodando.
 const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\10 - OUTUBRO\\_GERADOR PDF\\ACOMPS\\410\\410_MKTPTT.pdf';
 const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\10 - OUTUBRO\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_3.jpg'
 
@@ -31,6 +31,7 @@ const lembretePonto = require('./src/handlers/lembretePonto'); // <-- NOVO: Hand
 
 let atendidos = lerJson(ATENDIDOS_PATH, []);
 const staffs = lerJson(STAFFS_PATH, []);
+// Objeto que armazena usuários em espera: { 'numero@c.us': 'pdf' | 'imagem' }
 const usuariosAguardandoRelatorio = {};
 
 // Inicialização do cliente WhatsApp
@@ -73,12 +74,12 @@ client.on('ready', () => {
         timezone: TIMEZONE
     });
 
-    // 3. 13:00 - Retorno do Almoço
-    cron.schedule('0 13 * * 1-5', () => {
-        lembretePonto(client, '13:00');
-    }, {
-        timezone: TIMEZONE
-    });
+    // // 3. 13:00 - Retorno do Almoço (Comentado no original)
+    // cron.schedule('0 13 * * 1-5', () => {
+    //     lembretePonto(client, '13:00');
+    // }, {
+    //     timezone: TIMEZONE
+    // });
 
     // 4. 17:45 - Encerramento da jornada
     cron.schedule('45 17 * * 1-5', () => {
@@ -91,7 +92,10 @@ client.on('ready', () => {
     // ============================================================================================
     
     
-    const INTERVALO_VERIFICACAO = 3 * 60 * 1000;
+    // ============================================================================================
+    // === VERIFICADOR DE ARQUIVOS (setInterval) ===
+    // ============================================================================================
+    const INTERVALO_VERIFICACAO = 3 * 60 * 1000; // 3 minutos
 
     setInterval(async () => {
         // Agora verificamos o tamanho do objeto com Object.keys
@@ -118,14 +122,27 @@ client.on('ready', () => {
             for (const userNumero in usuariosAguardandoRelatorio) {
                 const tipoEsperado = usuariosAguardandoRelatorio[userNumero];
 
-                // 3. Verifica se o relatório esperado pelo usuário está pronto
+                // 3. Verifica se o relatório esperado pelo usuário está pronto e ENVIA
                 if (tipoEsperado === 'pdf' && pdfPronto) {
-                    console.log(`[VERIFICADOR]: PDF pronto para ${userNumero}. Notificando...`);
-                    await client.sendMessage(userNumero, "🎉 Boa notícia! Seu relatório em PDF já está disponível.");
+                    console.log(`[VERIFICADOR]: PDF pronto para ${userNumero}. Notificando e ENVIANDO...`);
+                    
+                    // 🚀 NOVO: Envio direto da mídia (PDF)
+                    const mediaPdf = MessageMedia.fromFilePath(CAMINHO_CHECK_PDF); 
+                    await client.sendMessage(userNumero, mediaPdf, { 
+                        caption: "🎉 Boa notícia! Seu relatório em PDF solicitado já está disponível." 
+                    });
+                    
                     notificados.push(userNumero); // Adiciona à lista para remoção
+                    
                 } else if (tipoEsperado === 'imagem' && imagemPronta) {
-                    console.log(`[VERIFICADOR]: Imagem pronta para ${userNumero}. Notificando...`);
-                    await client.sendMessage(userNumero, "🎉 Boa notícia! Seu relatório em Imagem já está disponível.");
+                    console.log(`[VERIFICADOR]: Imagem pronta para ${userNumero}. Notificando e ENVIANDO...`);
+                    
+                    // 🚀 NOVO: Envio direto da mídia (Imagem)
+                    const mediaImagem = MessageMedia.fromFilePath(CAMINHO_CHECK_IMAGEM);
+                    await client.sendMessage(userNumero, mediaImagem, { 
+                        caption: "🎉 Boa notícia! Seu relatório em Imagem solicitado já está disponível." 
+                    });
+                    
                     notificados.push(userNumero); // Adiciona à lista para remoção
                 }
             }
@@ -139,10 +156,11 @@ client.on('ready', () => {
             }
 
         } catch (error) {
-            console.error('[VERIFICADOR]: Erro ao checar arquivos:', error);
+            console.error('[VERIFICADOR]: Erro ao checar arquivos ou enviar:', error);
         }
 
     }, INTERVALO_VERIFICACAO);
+    // ============================================================================================
 });
 
 // ============================================================================================
@@ -152,17 +170,17 @@ client.on('message_create', async (message) => {
     // Bloco de DEBUG para encontrar IDs de Grupo
     // COMENTE/REMOVA ESTE BLOCO APÓS PEGAR OS IDs!
     // if (message.from.endsWith('@g.us') && message.body && !message.fromMe) {
-    //     try {
-    //         const chat = await message.getChat();
-    //         console.log("==================================================");
-    //         console.log(`[DEBUG ID GRUPO] ID: ${message.from}`);
-    //         console.log(`[DEBUG ID GRUPO] Nome: ${chat.name}`);
-    //         console.log(`[DEBUG ID GRUPO] Mensagem de Teste: ${message.body}`);
-    //         console.log("==================================================");
-    //     } catch (error) {
-    //         console.log(`[DEBUG ID GRUPO] ID: ${message.from} (Erro ao obter nome)`);
-    //     }
-    // }
+    //     try {
+    //         const chat = await message.getChat();
+    //         console.log("==================================================");
+    //         console.log(`[DEBUG ID GRUPO] ID: ${message.from}`);
+    //         console.log(`[DEBUG ID GRUPO] Nome: ${chat.name}`);
+    //         console.log(`[DEBUG ID GRUPO] Mensagem de Teste: ${message.body}`);
+    //         console.log("==================================================");
+    //     } catch (error) {
+    //         console.log(`[DEBUG ID GRUPO] ID: ${message.from} (Erro ao obter nome)`);
+    //     }
+    //}
     // Fim do bloco de DEBUG
     
     if (!message.fromMe) {
@@ -288,18 +306,21 @@ async function processUserMessage(message) {
         }
     }
 
-    const MENSAGEM_RELATORIOS_INDISPONIVEIS = '⚠️  Relatórios ainda não gerados. Vou te avisar assim que estiverem disponíveis! 🤖';
+    const MENSAGEM_RELATORIOS_INDISPONIVEIS = '⚠️  Relatórios ainda não gerados. Vou te avisar assim que estiverem disponíveis! 🤖';
 
     switch (opcao.toLowerCase()) {
         case '1': { 
             await client.sendSeen(numero);
             const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
             if (relatoriosProntos) {
+                // 🚀 Ação Imediata: Envia o relatório se estiver pronto na hora
                 await enviarRelatoriosPdf(client, message);
                 await registrarUso(numero, 'Relatórios em PDF');
                 if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
+                // Importante: remove da fila, caso estivesse (o que não deve acontecer)
                 delete usuariosAguardandoRelatorio[numero]; 
             } else {
+                // Ação de Agendamento: Adiciona à fila de espera
                 await client.sendMessage(message.from, MENSAGEM_RELATORIOS_INDISPONIVEIS);
                 usuariosAguardandoRelatorio[numero] = 'pdf';
                 console.log(`Usuário ${numero} adicionado à lista de espera para relatórios.`);
@@ -310,11 +331,14 @@ async function processUserMessage(message) {
             await client.sendSeen(numero);
             const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
             if (relatoriosProntos) {
+                // 🚀 Ação Imediata: Envia o relatório se estiver pronto na hora
                 await enviarRelatoriosImagem(client, message);
                 await registrarUso(numero, 'Relatórios em Imagem');
                 if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
+                // Importante: remove da fila, caso estivesse (o que não deve acontecer)
                 delete usuariosAguardandoRelatorio[numero];
             } else {
+                // Ação de Agendamento: Adiciona à fila de espera
                 await client.sendMessage(message.from, MENSAGEM_RELATORIOS_INDISPONIVEIS);
                 usuariosAguardandoRelatorio[numero]= 'imagem';
                 console.log(`Usuário ${numero} adicionado à lista de espera para relatórios.`);
@@ -327,6 +351,7 @@ async function processUserMessage(message) {
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
         case '4':
+            // 🚀 Aqui, a lógica de envio já é tratada dentro de enviarRemuneracao, não necessita de fila
             await enviarRemuneracao(client, message);
             break;
         case '5':
