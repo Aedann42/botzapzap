@@ -10,8 +10,8 @@ const cron = require('node-cron');
 const verificarArquivoAtualizado = require('./src/services/checkDateReports.js');
 const { lerJson, registrarUso, REPRESENTANTES_PATH, ETAPAS_PATH, ATENDIDOS_PATH, STAFFS_PATH } = require('./src/utils/dataHandler.js');
 // IMPORTANTE: Estes caminhos devem ser acessíveis (leitura) pelo servidor onde o bot está rodando.
-const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\10 - OUTUBRO\\_GERADOR PDF\\ACOMPS\\410\\410_MKTPTT.pdf';
-const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\10 - OUTUBRO\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_3.jpg'
+const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\11 - NOVEMBRO\\_GERADOR PDF\\ACOMPS\\410\\410_MKTPTT.pdf';
+const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\11 - NOVEMBRO\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_3.jpg'
 
 // Importação do texto do menu
 const MENU_TEXT = require('./src/config/menuOptions');

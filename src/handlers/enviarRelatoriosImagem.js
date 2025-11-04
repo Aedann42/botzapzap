@@ -59,7 +59,7 @@ module.exports = async function enviarRelatoriosImagem(client, message) {
         return;
     }
 
-    const pastaBase = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\10 - OUTUBRO\_GERADOR PDF\IMAGENS`;
+    const pastaBase = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\11 - NOVEMBRO\_GERADOR PDF\IMAGENS`;
     const pastaSetor = path.join(pastaBase, String(pessoa.setor));
 
     if (!fs.existsSync(pastaSetor)) {

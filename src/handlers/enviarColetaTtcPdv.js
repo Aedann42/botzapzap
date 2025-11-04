@@ -9,7 +9,7 @@ const dataHandler = require('../utils/dataHandler');
 const UNB_SETOR_4 = '1046853';
 const UNB_OUTROS_SETOR = '296708';
 const CAMINHO_ARQUIVO_EXCEL = path.join(
-    '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\10 - OUTUBRO\\_GERADOR PDF',
+    '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\11 - NOVEMBRO\\_GERADOR PDF',
     'Acomp Coleta TTC.xlsx'
 );
 

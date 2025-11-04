@@ -35,7 +35,7 @@ async function processNextRemuneracaoRequest() {
         
         // 1. Caminho para o DIRETÓRIO (pasta) do setor
         const diretorioPath = path.join(
-            String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\10 - OUTUBRO\_GERADOR PDF\REMUNERACAO`,
+            String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\11 - NOVEMBRO\_GERADOR PDF\REMUNERACAO`,
             setor
         );
 
