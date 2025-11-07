@@ -1,9 +1,9 @@
-// enviarResumoPDV.js
+// enviarResumoPDV.js (PADRONIZADO)
 const ExcelJS = require('exceljs');
 const path = require('path');
 
-// Importa o seu módulo de manipulação de dados
-const dataHandler = require('../utils/dataHandler'); // Caminho relativo
+// REMOVIDO: O 'dataHandler' não é mais necessário aqui.
+// const dataHandler = require('../utils/dataHandler'); 
 
 // --- Constantes de Configuração ---
 const UNB_SETOR_4 = '1046853';
@@ -13,7 +13,7 @@ const CAMINHO_ARQUIVO_EXCEL = path.join(
     'Acomp Tarefas do Dia.xlsx'
 );
 
-// --- Funções Auxiliares ---
+// --- Funções Auxiliares (Inalteradas) ---
 function excelSerialToDate(serial) {
     const excelEpoch = new Date(1899, 11, 30);
     return new Date(excelEpoch.getTime() + serial * 86400000).toLocaleDateString('pt-BR');
@@ -41,65 +41,9 @@ function gerarBarraProgresso(percentual) {
 }
 // --- Fim das Funções Auxiliares ---
 
-/**
- * Tenta encontrar o setor do usuário no REPRESENTANTES.JSON e, se falhar, em STAFFS.JSON.
- * (Lógica de busca combinada, inalterada)
- */
-function buscarSetorEUNB(telefoneDoUsuario) {
-    
-    const telLimpoUsuario = telefoneDoUsuario.replace('@c.us', '').replace(/\D/g, ''); 
-    console.log(`[DEBUG] Telefone do Usuário (message.from limpo): ${telLimpoUsuario}`);
-
-    let usuarioEncontrado = null;
-    let fonte = 'Nenhum';
-
-    // 1. TENTA BUSCAR EM REPRESENTANTES.JSON
-    const representantes = dataHandler.lerJson(dataHandler.REPRESENTANTES_PATH, []); 
-    if (Array.isArray(representantes)) {
-        usuarioEncontrado = representantes.find(s => {
-            const telLimpoJson = String(s.telefone).replace(/\D/g, '');
-            return telLimpoJson === telLimpoUsuario;
-        });
-        if (usuarioEncontrado) {
-            fonte = 'Representantes';
-        }
-    }
-
-    // 2. SE NÃO ENCONTROU, TENTA BUSCAR EM STAFFS.JSON
-    if (!usuarioEncontrado) {
-        const staffs = dataHandler.lerJson(dataHandler.STAFFS_PATH, []); 
-        if (Array.isArray(staffs)) {
-            usuarioEncontrado = staffs.find(s => {
-                const telLimpoJson = String(s.telefone).replace(/\D/g, '');
-                return telLimpoJson === telLimpoUsuario;
-            });
-            if (usuarioEncontrado) {
-                fonte = 'Staffs';
-            }
-        }
-    }
-    
-    // 3. RETORNA RESULTADO
-    if (!usuarioEncontrado) {
-        console.log(`❌ Telefone limpo ${telLimpoUsuario} não encontrado em nenhum arquivo JSON.`);
-        return null;
-    }
-
-    const setor = String(usuarioEncontrado.setor).trim();
-    const primeiroDigitoSetor = setor[0];
-    let UNB_Filtro = '';
-
-    if (primeiroDigitoSetor === '4') {
-        UNB_Filtro = UNB_SETOR_4; // '1046853'
-    } else {
-        UNB_Filtro = UNB_OUTROS_SETOR; // '296708'
-    }
-    
-    console.log(`✅ Usuário encontrado em ${fonte}. Setor: ${setor}.`);
-
-    return { UNB: UNB_Filtro, setor: setor };
-}
-
+// --- REMOVIDA ---
+// A função buscarSetorEUNB(telefoneDoUsuario) foi removida.
+// --- FIM ---
 
 // --- Fila de requisições (Inalterada) ---
 let isProcessingExcel = false;
@@ -110,10 +54,8 @@ async function processNextExcelRequest() {
         isProcessingExcel = false;
         return;
     }
-
     const nextRequest = excelRequestQueue.shift();
     isProcessingExcel = true;
-
     try {
         await nextRequest();
     } catch (error) {
@@ -126,21 +68,34 @@ async function processNextExcelRequest() {
 
 
 // --- Módulo principal ---
-module.exports = async (client, message) => {
+// ✅ ALTERADO: Agora recebe 'representante' como parâmetro
+module.exports = async (client, message, representante) => {
     
     const codigoPDV = message.body.replace(/\D/g, ''); 
     console.log('🔍 Código NB recebido do usuário:', codigoPDV);
 
-    const dadosFiltro = buscarSetorEUNB(message.from);
+    // --- 🚀 LÓGICA DE FILTRO ATUALIZADA ---
+    // A função 'buscarSetorEUNB' foi removida.
+    // A lógica agora usa o objeto 'representante' injetado.
 
-    if (!dadosFiltro) {
+    if (!representante || !representante.setor) {
+        console.error(`[ResumoPDV] Erro: Objeto 'representante' (ou seu setor) está faltando para ${message.from}.`);
         await client.sendMessage(message.from, '❌ Não foi possível identificar seu Setor. Seu telefone não está cadastrado. Por favor, avise o APR.');
         return;
     }
 
-    const UNB_Filtro = dadosFiltro.UNB;
-    const setorDoUsuario = dadosFiltro.setor;
+    const setorDoUsuario = String(representante.setor).trim();
+    const primeiroDigitoSetor = setorDoUsuario[0];
+    let UNB_Filtro = '';
+
+    if (primeiroDigitoSetor === '4') {
+        UNB_Filtro = UNB_SETOR_4; // '1046853'
+    } else {
+        UNB_Filtro = UNB_OUTROS_SETOR; // '296708'
+    }
+    
     console.log(`✅ Setor do Usuário: ${setorDoUsuario}. UNB de Filtro: ${UNB_Filtro}.`);
+    // --- FIM DA LÓGICA DE FILTRO ---
     
     // --------------------------------------------------------------------------------------------------
 

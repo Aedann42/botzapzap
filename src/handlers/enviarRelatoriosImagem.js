@@ -1,4 +1,4 @@
-// enviarRelatoriosImagem.js
+// enviarRelatoriosImagem.js (PADRONIZADO)
 const path = require('path');
 const fs = require('fs');
 const { MessageMedia } = require('whatsapp-web.js');
@@ -7,7 +7,9 @@ const { MessageMedia } = require('whatsapp-web.js');
 let isSendingImageReports = false; // Semáforo para controlar o envio de Imagens
 const imageReportSendQueue = []; // Fila de requisições de envio de Imagem
 
-// Função para processar a próxima requisição na fila de envio de relatórios de Imagem
+// --- Função da Fila (NÃO PRECISA DE CORREÇÃO) ---
+// Esta função já está correta, pois ela apenas usa 'message.from' (o LID)
+// para enviar as mensagens, o que é o comportamento esperado.
 async function processNextImageReportSendRequest() {
     if (imageReportSendQueue.length === 0) {
         isSendingImageReports = false; // Não há mais requisições, libera o semáforo
@@ -48,19 +50,27 @@ async function processNextImageReportSendRequest() {
     }
 }
 
-module.exports = async function enviarRelatoriosImagem(client, message) {
-    const numero = message.from.replace('@c.us', '');
+// --- Função Principal (AGORA PADRONIZADA) ---
+// ✅ ALTERADO: Agora recebe 'representante' como parâmetro
+module.exports = async function enviarRelatoriosImagem(client, message, representante) {
+    
+    // --- 🚀 LÓGICA DE AUTORIZAÇÃO ATUALIZADA ---
+    // A lógica de 'const numero = message.from.replace...' foi REMOVIDA.
+    // Usamos o objeto 'representante' que foi injetado.
 
-    const representantes = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'data', 'representantes.json'), 'utf8'));
-    const pessoa = representantes.find(rep => rep.telefone === numero);
-
-    if (!pessoa) {
-        await client.sendMessage(message.from, 'Seu número não está cadastrado como representante.');
+    if (!representante || !representante.setor) {
+        // Esta é uma verificação de segurança caso 'index.js' falhe em passar o representante
+        console.error(`[RelatoriosImagem] Erro: Objeto 'representante' (ou seu setor) está faltando para ${message.from}.`);
+        await client.sendMessage(message.from, 'Seu número não está cadastrado ou seu setor não foi definido. Avise o APR.');
         return;
     }
+    // --- FIM DA ATUALIZAÇÃO ---
+
 
     const pastaBase = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\11 - NOVEMBRO\_GERADOR PDF\IMAGENS`;
-    const pastaSetor = path.join(pastaBase, String(pessoa.setor));
+    
+    // ✅ CORRIGIDO: Usa o setor do 'representante' injetado
+    const pastaSetor = path.join(pastaBase, String(representante.setor));
 
     if (!fs.existsSync(pastaSetor)) {
         await client.sendMessage(message.from, 'Não encontrei documentos em imagem para seu setor.');
@@ -74,7 +84,7 @@ module.exports = async function enviarRelatoriosImagem(client, message) {
         return;
     }
 
-    // Adiciona a requisição à fila
+    // Adiciona a requisição à fila (Lógica inalterada)
     imageReportSendQueue.push({ client, message, pastaSetor, arquivos });
 
     // Inicia o processamento da fila se não houver nada rodando

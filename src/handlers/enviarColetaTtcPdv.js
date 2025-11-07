@@ -1,4 +1,4 @@
-// enviarColetaTtcPdv.js
+// enviarColetaTtcPdv.js (CORRIGIDO PARA LIDs)
 const ExcelJS = require('exceljs');
 const path = require('path');
 
@@ -66,13 +66,18 @@ function gerarBarraProgresso(percentual) {
 
 /**
  * Tenta encontrar o setor do usuário no REPRESENTANTES.JSON e, se falhar, em STAFFS.JSON.
- * @param {string} telefoneDoUsuario - O telefone do usuário (e.g., message.from).
+ * @param {string} telefoneLimpoDoUsuario - O telefone JÁ LIMPO do usuário (e.g., "5532...").
  * @returns {{UNB: string, setor: string} | null} Objeto com a UNB de filtro e o setor, ou null.
  */
-function buscarSetorEUNB(telefoneDoUsuario) {
+function buscarSetorEUNB(telefoneLimpoDoUsuario) { // <-- PARÂMETRO MUDADO
     
-    const telLimpoUsuario = telefoneDoUsuario.replace('@c.us', '').replace(/\D/g, ''); 
-    console.log(`[DEBUG] Telefone do Usuário (message.from limpo): ${telLimpoUsuario}`);
+    // const telLimpoUsuario = telefoneDoUsuario.replace('@c.us', '').replace(/\D/g, ''); // <-- LINHA ANTIGA
+    
+    // --- 🚀 CORREÇÃO LID (1/2) ---
+    // A função agora recebe o número já limpo, então usamos ele direto.
+    const telLimpoUsuario = telefoneLimpoDoUsuario; 
+    console.log(`[DEBUG] Telefone do Usuário (já limpo): ${telLimpoUsuario}`);
+    // --- FIM CORREÇÃO ---
 
     let usuarioEncontrado = null;
     let fonte = 'Nenhum';
@@ -103,7 +108,7 @@ function buscarSetorEUNB(telefoneDoUsuario) {
         }
     }
     
-    // 3. RETORNA RESULTADO
+    // 3. RETORNA RESULTADO (Lógica inalterada)
     if (!usuarioEncontrado) {
         console.log(`❌ Telefone limpo ${telLimpoUsuario} não encontrado em nenhum arquivo JSON.`);
         return null;
@@ -152,8 +157,31 @@ module.exports = async (client, message) => {
     const codigoPDV = message.body.replace(/\D/g, '');
     console.log('🔍 Código PDV recebido do usuário:', codigoPDV);
     
+    // --- 🚀 CORREÇÃO LID (2/2) ---
+    // Obtemos o contato e o número de telefone AQUI (na função async)
+    let contact;
+    try {
+        contact = await message.getContact();
+    } catch (e) {
+        console.error(`[enviarColetaTtcPdv] Falha crítica ao obter contato: ${message.from}`, e);
+        await client.sendMessage(message.from, '❌ Ocorreu um erro ao verificar sua identidade. Tente novamente.');
+        return;
+    }
+
+    const numeroTelefoneLimpo = contact.number; // Ex: "5532..."
+
+    if (!numeroTelefoneLimpo) {
+        console.log(`[enviarColetaTtcPdv] Falha ao obter número de telefone do ID: ${message.from}.`);
+        await client.sendMessage(message.from, '❌ Ocorreu um erro ao verificar seus dados. Tente novamente.');
+        return;
+    }
+    // --- FIM CORREÇÃO ---
+
+
     // 1. OBTENÇÃO DO FILTRO UNB
-    const dadosFiltro = buscarSetorEUNB(message.from);
+    // const dadosFiltro = buscarSetorEUNB(message.from); // <-- LINHA ANTIGA
+    // Agora passamos o número JÁ LIMPO para a função síncrona
+    const dadosFiltro = buscarSetorEUNB(numeroTelefoneLimpo); 
 
     if (!dadosFiltro) {
         await client.sendMessage(message.from, '❌ Não foi possível identificar seu Setor. Seu telefone não está cadastrado. Por favor, avise o APR.');

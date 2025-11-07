@@ -1,4 +1,4 @@
-// index.js
+// index.js (VERSÃO FINAL - Padronizada e Corrigida para LIDs)
 
 // --- Importações Originais ---
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
@@ -31,7 +31,7 @@ const lembretePonto = require('./src/handlers/lembretePonto'); // <-- NOVO: Hand
 
 let atendidos = lerJson(ATENDIDOS_PATH, []);
 const staffs = lerJson(STAFFS_PATH, []);
-// Objeto que armazena usuários em espera: { 'numero@c.us': 'pdf' | 'imagem' }
+// Objeto que armazena usuários em espera: { 'lid_do_usuario@lid': 'pdf' | 'imagem' }
 const usuariosAguardandoRelatorio = {};
 
 // Inicialização do cliente WhatsApp
@@ -39,8 +39,6 @@ const client = new Client({
     authStrategy: new LocalAuth({
         dataPath: '.session'
     }),
-    // 💡 SOLUÇÃO: Define o webCacheType para forçar o recarregamento do código web correto
-    // Se 'local' der problema, tente 'remote'
     webCacheType: 'remote', 
     puppeteer: {
         headless: true,
@@ -74,13 +72,6 @@ client.on('ready', () => {
         timezone: TIMEZONE
     });
 
-    // // 3. 13:00 - Retorno do Almoço (Comentado no original)
-    // cron.schedule('0 13 * * 1-5', () => {
-    //     lembretePonto(client, '13:00');
-    // }, {
-    //     timezone: TIMEZONE
-    // });
-
     // 4. 17:45 - Encerramento da jornada
     cron.schedule('45 17 * * 1-5', () => {
         lembretePonto(client, '17:45');
@@ -98,7 +89,6 @@ client.on('ready', () => {
     const INTERVALO_VERIFICACAO = 3 * 60 * 1000; // 3 minutos
 
     setInterval(async () => {
-        // Agora verificamos o tamanho do objeto com Object.keys
         if (Object.keys(usuariosAguardandoRelatorio).length === 0) {
             return;
         }
@@ -110,7 +100,6 @@ client.on('ready', () => {
             const pdfPronto = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
             const imagemPronta = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
 
-            // Se nenhum relatório estiver pronto, não faz nada
             if (!pdfPronto && !imagemPronta) {
                 console.log('[VERIFICADOR]: Nenhum relatório disponível ainda.');
                 return;
@@ -126,7 +115,6 @@ client.on('ready', () => {
                 if (tipoEsperado === 'pdf' && pdfPronto) {
                     console.log(`[VERIFICADOR]: PDF pronto para ${userNumero}. Notificando e ENVIANDO...`);
                     
-                    // 🚀 NOVO: Envio direto da mídia (PDF)
                     const mediaPdf = MessageMedia.fromFilePath(CAMINHO_CHECK_PDF); 
                     await client.sendMessage(userNumero, mediaPdf, { 
                         caption: "🎉 Boa notícia! Seu relatório em PDF solicitado já está disponível." 
@@ -137,7 +125,6 @@ client.on('ready', () => {
                 } else if (tipoEsperado === 'imagem' && imagemPronta) {
                     console.log(`[VERIFICADOR]: Imagem pronta para ${userNumero}. Notificando e ENVIANDO...`);
                     
-                    // 🚀 NOVO: Envio direto da mídia (Imagem)
                     const mediaImagem = MessageMedia.fromFilePath(CAMINHO_CHECK_IMAGEM);
                     await client.sendMessage(userNumero, mediaImagem, { 
                         caption: "🎉 Boa notícia! Seu relatório em Imagem solicitado já está disponível." 
@@ -167,19 +154,17 @@ client.on('ready', () => {
 // === LISTENER PARA COMANDOS DO OPERADOR (VIA WHATSAPP WEB) ===
 // ============================================================================================
 client.on('message_create', async (message) => {
-    // Bloco de DEBUG para encontrar IDs de Grupo
-    // COMENTE/REMOVA ESTE BLOCO APÓS PEGAR OS IDs!
+    // Bloco de DEBUG para encontrar IDs de Grupo (Mantenha comentado)
     // if (message.from.endsWith('@g.us') && message.body && !message.fromMe) {
-    //     try {
-    //         const chat = await message.getChat();
-    //         console.log("==================================================");
-    //         console.log(`[DEBUG ID GRUPO] ID: ${message.from}`);
-    //         console.log(`[DEBUG ID GRUPO] Nome: ${chat.name}`);
-    //         console.log(`[DEBUG ID GRUPO] Mensagem de Teste: ${message.body}`);
-    //         console.log("==================================================");
-    //     } catch (error) {
-    //         console.log(`[DEBUG ID GRUPO] ID: ${message.from} (Erro ao obter nome)`);
-    //     }
+    //     try {
+    //         const chat = await message.getChat();
+    //         console.log("==================================================");
+    //         console.log(`[DEBUG ID GRUPO] ID: ${message.from}`);
+    //         console.log(`[DEBUG ID GRUPO] Nome: ${chat.name}`);
+    //         console.log("==================================================");
+    //     } catch (error) {
+    //         console.log(`[DEBUG ID GRUPO] ID: ${message.from} (Erro ao obter nome)`);
+    //     }
     //}
     // Fim do bloco de DEBUG
     
@@ -189,13 +174,9 @@ client.on('message_create', async (message) => {
 
     if (message.body.trim() === '/ativar') {
         console.log('[OPERADOR]: Comando /ativar recebido.');
-        
-        await client.sendMessage(message.to, '🤖 Iniciando campanha de ativação para novos representantes... Este processo pode levar alguns minutos. Avisarei quando terminar.');
-
+        await client.sendMessage(message.to, '🤖 Iniciando campanha de ativação para novos representantes... Avisarei quando terminar.');
         const resultado = await enviarMenuAtivacao(client);
-
         await client.sendMessage(message.to, `✅ ${resultado}`);
-        
         return;
     }
 
@@ -204,14 +185,27 @@ client.on('message_create', async (message) => {
         console.log(`[OPERADOR]: Comando detectado no chat ${message.to}`);
 
         const commandForUser = message.body.substring(commandPrefix.length);
-        const targetUser = message.to;
+        const targetUser = message.to; // message.to será o ID correto (seja @c.us ou @lid)
         
         console.log(`[OPERADOR]: Executando comando '${commandForUser}' para o usuário ${targetUser}`);
 
         const mockMessage = {
             from: targetUser,
             body: commandForUser,
-            _operator_triggered: true
+            _operator_triggered: true, 
+            
+            // Simula a função getContact() para que a lógica de autorização funcione
+            getContact: async () => {
+                try {
+                    // Tenta obter o contato pelo ID
+                    return await client.getContactById(targetUser);
+                } catch (e) {
+                    console.error("Erro ao simular getContact para comando de operador:", e);
+                    // Retorna um objeto mínimo para evitar que quebre
+                    // (Pode falhar se o 'targetUser' for um LID e o contato não for conhecido)
+                    return { number: targetUser.split('@')[0] }; 
+                }
+            }
         };
 
         await processUserMessage(mockMessage);
@@ -220,21 +214,46 @@ client.on('message_create', async (message) => {
 
 
 // ============================================================================================
-// === FUNÇÃO CENTRAL PARA PROCESSAR MENSAGENS DE USUÁRIOS ===
+// === FUNÇÃO CENTRAL PARA PROCESSAR MENSAGENS DE USUÁRIOS (ATUALIZADA) ===
 // ============================================================================================
 async function processUserMessage(message) {
+    // 'numero' agora é o ID da conversa (pode ser o LID: "691..._@lid")
+    // Usaremos este ID como a chave única para 'atendidos', 'etapas', e para enviar respostas.
     const numero = message.from;
 
+    // --- 🚀 INÍCIO DA CORREÇÃO (LID) ---
+    // Para AUTORIZAÇÃO, precisamos do número de telefone real.
+    // Usamos message.getContact() para "traduzir" o LID para o número.
+    let contact;
+    try {
+        contact = await message.getContact();
+    } catch (e) {
+        console.error(`Falha crítica ao obter contato para o ID: ${numero}. Mensagem não será processada.`, e);
+        return; // Sai da função se não conseguir obter o contato
+    }
+
+    const numeroTelefoneLimpo = contact.number; // Ex: "553298374229"
+
+    // Se não conseguirmos o número (privacidade, bug, etc.), não podemos autorizar.
+    if (!numeroTelefoneLimpo) {
+        console.log(`Falha ao obter número de telefone do ID: ${numero}. (Pode ser config. de privacidade)`);
+        return; 
+    }
+    // --- FIM DA CORREÇÃO (LID) ---
+
+
     const representantes = lerJson(REPRESENTANTES_PATH, []);
-    const numeroLimpo = numero.replace('@c.us', '');
-    const representante = representantes.find(rep => rep.telefone === numeroLimpo);
+    
+    // CORRIGIDO: Usamos o 'numeroTelefoneLimpo' que pegamos do 'contact'
+    const representante = representantes.find(rep => rep.telefone === numeroTelefoneLimpo);
 
     if (!representante) {
-        console.log(`Número não autorizado: ${numero}`);
+        console.log(`Número não autorizado: ${numeroTelefoneLimpo} (ID: ${numero})`);
         return;
     }
 
-    if (!atendidos.includes(numero) && !staffs.some(staff => String(staff.telefone) === numeroLimpo)) {
+    // CORRIGIDO: O segundo check (de 'staffs') também precisa usar o numeroTelefoneLimpo
+    if (!atendidos.includes(numero) && !staffs.some(staff => String(staff.telefone) === numeroTelefoneLimpo)) {
         const hora = new Date().getHours();
         const saudacaoBase = hora <= 12 ? 'Bom dia' : (hora <= 18 ? 'Boa tarde' : 'Boa noite');
         const saudacoesAlternativas = [
@@ -246,11 +265,11 @@ async function processUserMessage(message) {
         const saudacaoAleatoria = saudacoesAlternativas[Math.floor(Math.random() * saudacoesAlternativas.length)];
 
         await client.sendMessage(
-            message.from,
+            message.from, // Usa o 'message.from' (o LID) para enviar
             `${saudacaoBase}! ${saudacaoAleatoria}\n${MENU_TEXT}`
         );
 
-        atendidos.push(numero);
+        atendidos.push(numero); // Salva o 'numero' (o LID) na lista.
         fs.writeFileSync(ATENDIDOS_PATH, JSON.stringify(atendidos, null, 2));
         return;
     }
@@ -263,7 +282,8 @@ async function processUserMessage(message) {
 
         try {
             if (etapaAtual === 'pdv') {
-                await enviarResumoPDV(client, message);
+                // ✅ PADRONIZADO: Passa o 'representante'
+                await enviarResumoPDV(client, message, representante); 
                 await registrarUso(numero, 'Consulta de Tarefas PDV');
                 delete etapas[numero];
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
@@ -271,6 +291,7 @@ async function processUserMessage(message) {
             }
 
             if (etapaAtual === 'coleta_ttc') {
+                // (Este arquivo não foi padronizado, foi corrigido internamente)
                 await enviarColetaTtcPdv(client, message);
                 await registrarUso(numero, 'Consulta de Coleta TTC PDV');
                 delete etapas[numero];
@@ -279,7 +300,8 @@ async function processUserMessage(message) {
             }
             
             if (etapaAtual === 'giro_equipamentos') {
-                await enviarGiroEquipamentosPdv(client, message);
+                // ✅ PADRONIZADO: Passa o 'representante'
+                await enviarGiroEquipamentosPdv(client, message, representante);
                 await registrarUso(numero, 'Consulta de Giro de Equipamentos PDV');
                 delete etapas[numero];
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
@@ -288,12 +310,14 @@ async function processUserMessage(message) {
 
 
             if (etapaAtual === 'remuneracao') {
+                // (Este arquivo não foi padronizado, foi corrigido internamente)
                 await enviarRemuneracao(client, message);
                 await registrarUso(numero, 'Consulta de Remuneração');
                 return;
             }
 
             if (etapaAtual === 'aguardandoEscolha') {
+                // (Este arquivo não precisou de correção)
                 await enviarListaContatos(client, message);
                 return;
             }
@@ -306,21 +330,19 @@ async function processUserMessage(message) {
         }
     }
 
-    const MENSAGEM_RELATORIOS_INDISPONIVEIS = '⚠️  Relatórios ainda não gerados. Vou te avisar assim que estiverem disponíveis! 🤖';
+    const MENSAGEM_RELATORIOS_INDISPONIVEIS = '⚠️  Relatórios ainda não gerados. Vou te avisar assim que estiverem disponíveis! 🤖';
 
     switch (opcao.toLowerCase()) {
         case '1': { 
             await client.sendSeen(numero);
             const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
             if (relatoriosProntos) {
-                // 🚀 Ação Imediata: Envia o relatório se estiver pronto na hora
-                await enviarRelatoriosPdf(client, message);
+                // ✅ PADRONIZADO: Passa o 'representante'
+                await enviarRelatoriosPdf(client, message, representante);
                 await registrarUso(numero, 'Relatórios em PDF');
                 if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
-                // Importante: remove da fila, caso estivesse (o que não deve acontecer)
                 delete usuariosAguardandoRelatorio[numero]; 
             } else {
-                // Ação de Agendamento: Adiciona à fila de espera
                 await client.sendMessage(message.from, MENSAGEM_RELATORIOS_INDISPONIVEIS);
                 usuariosAguardandoRelatorio[numero] = 'pdf';
                 console.log(`Usuário ${numero} adicionado à lista de espera para relatórios.`);
@@ -331,14 +353,12 @@ async function processUserMessage(message) {
             await client.sendSeen(numero);
             const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
             if (relatoriosProntos) {
-                // 🚀 Ação Imediata: Envia o relatório se estiver pronto na hora
-                await enviarRelatoriosImagem(client, message);
+                // ✅ PADRONIZADO: Passa o 'representante'
+                await enviarRelatoriosImagem(client, message, representante);
                 await registrarUso(numero, 'Relatórios em Imagem');
                 if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
-                // Importante: remove da fila, caso estivesse (o que não deve acontecer)
                 delete usuariosAguardandoRelatorio[numero];
             } else {
-                // Ação de Agendamento: Adiciona à fila de espera
                 await client.sendMessage(message.from, MENSAGEM_RELATORIOS_INDISPONIVEIS);
                 usuariosAguardandoRelatorio[numero]= 'imagem';
                 console.log(`Usuário ${numero} adicionado à lista de espera para relatórios.`);
@@ -351,7 +371,7 @@ async function processUserMessage(message) {
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
         case '4':
-            // 🚀 Aqui, a lógica de envio já é tratada dentro de enviarRemuneracao, não necessita de fila
+            // (Este arquivo não foi padronizado, foi corrigido internamente)
             await enviarRemuneracao(client, message);
             break;
         case '5':
@@ -362,6 +382,7 @@ async function processUserMessage(message) {
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
         case '6':
+            // (Este arquivo não precisou de correção)
             await client.sendSeen(numero);
             await enviarListaContatos(client, message);
             await registrarUso(numero, 'Lista de Contatos');
@@ -376,13 +397,14 @@ async function processUserMessage(message) {
             break;
         }
         case '8': {
-            await enviarCts(client, message, representante);
+            // (Este arquivo já estava padronizado)
+            await enviarCts(client, message, representante); 
             await registrarUso(numero, 'Consulta de Bonificação CT por Setor');
             break;
         }
         case '9': {
             await client.sendMessage(message.from, 'Por favor, envie o código do PDV que deseja consultar o *Giro de Equipamentos*! (Apenas números)');
-            etapas[numero] = { etapa: 'giro_equipamentos' };
+            etapas[numero] = { etapa: 'giro_equipamentos' }; // Apenas define a etapa
             await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
@@ -418,16 +440,19 @@ async function processUserMessage(message) {
 // === LISTENER PRINCIPAL PARA MENSAGENS RECEBIDAS ===
 // ============================================================================================
 client.on('message', async message => {
+    // Ignora mensagens de grupo
     if (message.from.endsWith('@g.us')) {
-        const chat = await message.getChat();
-        // Não usar o isMention aqui se você quiser o comportamento original
         const isMention = message.mentionedIds && message.mentionedIds.includes(client.info.wid._serialized);
-        if (!isMention) {
-            await chat.sendSeen();
+        if (isMention) {
+             // console.log(`[GRUPO]: Fui mencionado no grupo ${message.from}`);
+        } else {
+             const chat = await message.getChat();
+             await chat.sendSeen();
         }
         return; 
     }
 
+    // Processa todas as outras mensagens (chats privados)
     await processUserMessage(message);
 });
 
@@ -438,12 +463,12 @@ client.initialize();
 // Eventos adicionais
 client.on('disconnected', reason => {
     console.error('⚠️ Cliente desconectado:', reason);
-    process.exit(1);
+    process.exit(1); // Força a reinicialização (se estiver usando PM2, ele vai reiniciar)
 });
 
 client.on('auth_failure', msg => {
     console.error('❌ Falha na autenticação:', msg);
-    process.exit(1);
+    process.exit(1); // Força a reinicialização
 });
 
 client.on('change_state', state => {

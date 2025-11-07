@@ -1,12 +1,11 @@
-// enviarRelatoriosPdf.js
+// enviarRelatoriosPdf.js (PADRONIZADO)
 const path = require('path');
 const fs = require('fs');
 const { MessageMedia } = require('whatsapp-web.js');
 
 /**
  * Verifica se um arquivo deve ser enviado com base na extensão.
- * @param {string} nomeArquivo O nome do arquivo a ser verificado.
- * @returns {boolean} Retorna 'true' se a extensão do arquivo não estiver na lista de bloqueadas.
+ * (Função auxiliar inalterada)
  */
 function isArquivoValidoParaEnvio(nomeArquivo) {
     const extensoesBloqueadas = ['.webp', '.db'];
@@ -28,10 +27,11 @@ async function processNextPdfReportSendRequest() {
     const nextRequest = pdfReportSendQueue.shift();
     isSendingPdfReports = true;
 
-    const { client, message, arquivosParaEnviar, nomePastaGeral } = nextRequest;
+    // ✅ CORREÇÃO: Desestruturamos o 'representante' para usar no log
+    const { client, message, arquivosParaEnviar, nomePastaGeral, representante } = nextRequest;
     
-    // CORREÇÃO: Declaramos a variável aqui para que seja visível em todo o escopo da função
-    const numeroLimpo = message.from.split('@')[0];
+    // ✅ CORREÇÃO: Usamos o telefone do representante para o log
+    const numeroLimpoParaLog = representante ? representante.telefone : message.from.split('@')[0];
 
     try {
         await client.sendMessage(message.from, '🔄 Enviando relatórios, aguarde...');
@@ -55,8 +55,8 @@ async function processNextPdfReportSendRequest() {
 
         await client.sendMessage(message.from, '✅ Relatórios enviados com sucesso.');
 
-        // LOG FINAL OTIMIZADO
-        console.log(`[${path.basename(__filename)}] Envio concluído para ${numeroLimpo}: ${arquivosParaEnviar.length} arquivos enviados ${nomePastaGeral ? `(usando pasta geral ${nomePastaGeral})` : '(sem pasta geral)'}.`);
+        // ✅ LOG FINAL CORRIGIDO
+        console.log(`[${path.basename(__filename)}] Envio concluído para ${numeroLimpoParaLog}: ${arquivosParaEnviar.length} arquivos enviados ${nomePastaGeral ? `(usando pasta geral ${nomePastaGeral})` : '(sem pasta geral)'}.`);
 
     } catch (error) {
         console.error('❌ Erro ao enviar relatórios:', error);
@@ -66,19 +66,27 @@ async function processNextPdfReportSendRequest() {
     }
 }
 
-// --- Função Principal Exportada ---
-module.exports = async function enviarRelatoriosPdf(client, message) {
-    const numero = message.from.replace('@c.us', '');
-    const representantes = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'data', 'representantes.json'), 'utf8'));
-    const pessoa = representantes.find(rep => rep.telefone === numero);
+// --- Função Principal Exportada (PADRONIZADA) ---
+// ✅ ALTERADO: Agora recebe 'representante' como parâmetro
+module.exports = async function enviarRelatoriosPdf(client, message, representante) {
+    
+    // --- 🚀 LÓGICA DE AUTORIZAÇÃO ATUALIZADA ---
+    // A lógica de 'const numero = message.from.replace...' foi REMOVIDA.
+    // Usamos o objeto 'representante' que foi injetado.
 
-    if (!pessoa) {
-        await client.sendMessage(message.from, 'Seu número não está cadastrado como representante.');
+    if (!representante || !representante.setor) {
+        // Verificação de segurança
+        console.error(`[RelatoriosPdf] Erro: Objeto 'representante' (ou seu setor) está faltando para ${message.from}.`);
+        await client.sendMessage(message.from, 'Seu número não está cadastrado ou seu setor não foi definido. Avise o APR.');
         return;
     }
+    // --- FIM DA ATUALIZAÇÃO ---
+
 
     const pastaBase = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\11 - NOVEMBRO\_GERADOR PDF\ACOMPS`;
-    const pastaSetor = path.join(pastaBase, String(pessoa.setor));
+    
+    // ✅ CORRIGIDO: Usa o setor do 'representante' injetado
+    const pastaSetor = path.join(pastaBase, String(representante.setor));
     let arquivosParaEnviar = [];
 
     if (fs.existsSync(pastaSetor)) {
@@ -90,7 +98,8 @@ module.exports = async function enviarRelatoriosPdf(client, message) {
         });
     }
 
-    const setorStr = String(pessoa.setor);
+    // ✅ CORRIGIDO: Usa o setor do 'representante' injetado
+    const setorStr = String(representante.setor);
     const primeiroDigito = setorStr[0];
     let nomePastaGeral = null;
 
@@ -118,7 +127,8 @@ module.exports = async function enviarRelatoriosPdf(client, message) {
         return;
     }
     
-    pdfReportSendQueue.push({ client, message, arquivosParaEnviar, nomePastaGeral });
+    // ✅ CORREÇÃO: Passa o 'representante' para a fila (para o log)
+    pdfReportSendQueue.push({ client, message, arquivosParaEnviar, nomePastaGeral, representante });
 
     if (!isSendingPdfReports) {
         processNextPdfReportSendRequest();

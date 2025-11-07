@@ -1,3 +1,5 @@
+// enviarRemuneracao.js (CORRIGIDO PARA LIDs)
+
 const fs = require('fs');
 const path = require('path');
 const { MessageMedia } = require('whatsapp-web.js');
@@ -17,17 +19,31 @@ async function processNextRemuneracaoRequest() {
 
     isSendingRemuneracao = true;
     const { client, message, matricula } = remuneracaoSendQueue.shift();
-    const numero = message.from;
+    const numero = message.from; // Este é o LID
 
     console.log(`[Remuneração Fila] Processando solicitação para ${numero} (Matrícula: ${matricula})`);
 
     try {
+        // --- 🚀 CORREÇÃO LID (1/3) ---
+        // Precisamos obter o contato para traduzir o LID para o número de telefone
+        const contact = await message.getContact();
+        const telefoneLimpo = contact.number; // Este é o número de telefone real (ex: 5532...)
+        
+        if (!telefoneLimpo) {
+            console.error(`[Remuneração Fila] Falha ao obter número de telefone do ID: ${numero}`);
+            await client.sendMessage(numero, '❌ Ocorreu um erro ao recuperar seus dados. Tente novamente.');
+            return; // Finaliza o processamento
+        }
+        // --- FIM CORREÇÃO ---
+
         const representantes = lerJson(REPRESENTANTES_PATH, []);
-        const telefone = numero.replace('@c.us', '');
-        const representante = representantes.find(r => r.telefone === telefone);
+        
+        // const telefone = numero.replace('@c.us', ''); // <-- LINHA ANTIGA
+        // Usamos o 'telefoneLimpo' obtido acima
+        const representante = representantes.find(r => r.telefone === telefoneLimpo); 
 
         if (!representante || !representante.setor) {
-            await client.sendMessage(numero, '❌ Ocorreu um erro ao recuperar seus dados. Tente novamente.');
+            await client.sendMessage(numero, '❌ Ocorreu um erro ao recuperar seus dados (representante não encontrado pelo telefone). Tente novamente.');
             return; // Finaliza o processamento para este usuário
         }
         
@@ -89,9 +105,9 @@ async function processNextRemuneracaoRequest() {
     }
 }
 
-// NENHUMA MUDANÇA DAQUI PARA BAIXO
+// NENHUMA MUDANÇA DAQUI PARA BAIXO... EXCETO ONDE INDICADO
 async function enviarRemuneracao(client, message) {
-    const numero = message.from;
+    const numero = message.from; // Este é o LID
     const texto = message.body.trim();
     const isOperatorRequest = message._operator_triggered === true;
 
@@ -110,10 +126,22 @@ async function enviarRemuneracao(client, message) {
     // --- CAMINHO 1: REQUISIÇÃO DIRETA DO OPERADOR ---
     if (isOperatorRequest) {
         console.log(`[OPERADOR] Requisição de remuneração para ${numero}, pulando validação.`);
-        // Validações básicas de cadastro, mas sem pedir matrícula
+        
+        // --- 🚀 CORREÇÃO LID (2/3) ---
+        // O mockMessage criado no index.js tem a função getContact()
+        const contact = await message.getContact();
+        const telefoneLimpo = contact.number;
+        
+        if (!telefoneLimpo) {
+            console.error(`[Remuneração Operador] Falha ao obter número de telefone do ID: ${numero}`);
+            await client.sendMessage(numero, '❌ Cadastro do representante não encontrado ou sem setor definido. Não é possível continuar.');
+            return;
+        }
+        // --- FIM CORREÇÃO ---
+        
         const representantes = lerJson(REPRESENTANTES_PATH, []);
-        const telefone = numero.replace('@c.us', '');
-        const representante = representantes.find(r => r.telefone === telefone);
+        // const telefone = numero.replace('@c.us', ''); // <-- LINHA ANTIGA
+        const representante = representantes.find(r => r.telefone === telefoneLimpo); // <-- LINHA CORRIGIDA
 
         if (!representante || !representante.setor) {
             await client.sendMessage(numero, '❌ Cadastro do representante não encontrado ou sem setor definido. Não é possível continuar.');
@@ -141,10 +169,22 @@ async function enviarRemuneracao(client, message) {
             return;
         }
         
+        // --- 🚀 CORREÇÃO LID (3/3) ---
+        const contact = await message.getContact();
+        const telefoneLimpo = contact.number;
+        
+        if (!telefoneLimpo) {
+            console.error(`[Remuneração Matrícula] Falha ao obter número de telefone do ID: ${numero}`);
+            await client.sendMessage(numero, '❌ Ocorreu um erro ao verificar seus dados. Tente novamente.');
+            return;
+        }
+        // --- FIM CORREÇÃO ---
+        
         const representantes = lerJson(REPRESENTANTES_PATH, []);
         const senhaRemuneracao = lerJson(SENHA_REMUNERACAO_PATH, []);
-        const telefone = numero.replace('@c.us', '');
-        const representante = representantes.find(r => r.telefone === telefone);
+        
+        // const telefone = numero.replace('@c.us', ''); // <-- LINHA ANTIGA
+        const representante = representantes.find(r => r.telefone === telefoneLimpo); // <-- LINHA CORRIGIDA
         const setor = representante?.setor?.toString();
 
         const credencialValida = senhaRemuneracao.find(
@@ -152,6 +192,7 @@ async function enviarRemuneracao(client, message) {
         );
 
         if (!credencialValida) {
+            // Se 'setor' for undefined (representante não encontrado), ele falhará aqui.
             await client.sendMessage(numero, '❌ Matrícula incorreta para o seu setor. Para tentar novamente, digite a opção no menu.');
             delete etapas[numero];
             escreverJson(ETAPAS_PATH, etapas);
