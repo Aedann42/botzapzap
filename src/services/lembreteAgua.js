@@ -43,7 +43,7 @@ function registrarNoLog(acao) {
 const NUMEROS_DESTINO_AGUA = [
     '553288556411@c.us',
     '553299447900@c.us',
-    //'553298374229@@c.us'
+    //'553299982517@@c.us'
     ];
 
     const TOTAL_LEMBRETES_POR_DIA = 10;

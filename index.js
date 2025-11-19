@@ -1,4 +1,4 @@
-// index.js (VERSÃO FINAL - Padronizada e Corrigida para LIDs)
+// index.js (VERSÃO FINAL - Padronizada e Corrigida para LIDs, Logs e Atendidos)
 
 // --- Importações Originais ---
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
@@ -9,6 +9,7 @@ const cron = require('node-cron');
 
 const verificarArquivoAtualizado = require('./src/services/checkDateReports.js');
 const { lerJson, registrarUso, REPRESENTANTES_PATH, ETAPAS_PATH, ATENDIDOS_PATH, STAFFS_PATH } = require('./src/utils/dataHandler.js');
+
 // IMPORTANTE: Estes caminhos devem ser acessíveis (leitura) pelo servidor onde o bot está rodando.
 const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\11 - NOVEMBRO\\_GERADOR PDF\\ACOMPS\\410\\410_MKTPTT.pdf';
 const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\11 - NOVEMBRO\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_3.jpg'
@@ -26,11 +27,11 @@ const enviarMenuAtivacao = require('./src/handlers/AtivacaoRepresentantes.js');
 const enviarColetaTtcPdv = require('./src/handlers/enviarColetaTtcPdv');
 const enviarCts = require('./src/handlers/enviarCts');
 const enviarGiroEquipamentosPdv = require('./src/handlers/enviarGiroEquipamentosPdv');
-const lembretePonto = require('./src/handlers/lembretePonto'); // <-- NOVO: Handler do Lembrete
-
+const lembretePonto = require('./src/handlers/lembretePonto'); 
 
 let atendidos = lerJson(ATENDIDOS_PATH, []);
 const staffs = lerJson(STAFFS_PATH, []);
+
 // Objeto que armazena usuários em espera: { 'lid_do_usuario@lid': 'pdf' | 'imagem' }
 const usuariosAguardandoRelatorio = {};
 
@@ -154,20 +155,6 @@ client.on('ready', () => {
 // === LISTENER PARA COMANDOS DO OPERADOR (VIA WHATSAPP WEB) ===
 // ============================================================================================
 client.on('message_create', async (message) => {
-    // Bloco de DEBUG para encontrar IDs de Grupo (Mantenha comentado)
-    // if (message.from.endsWith('@g.us') && message.body && !message.fromMe) {
-    //     try {
-    //         const chat = await message.getChat();
-    //         console.log("==================================================");
-    //         console.log(`[DEBUG ID GRUPO] ID: ${message.from}`);
-    //         console.log(`[DEBUG ID GRUPO] Nome: ${chat.name}`);
-    //         console.log("==================================================");
-    //     } catch (error) {
-    //         console.log(`[DEBUG ID GRUPO] ID: ${message.from} (Erro ao obter nome)`);
-    //     }
-    //}
-    // Fim do bloco de DEBUG
-    
     if (!message.fromMe) {
         return;
     }
@@ -218,7 +205,7 @@ client.on('message_create', async (message) => {
 // ============================================================================================
 async function processUserMessage(message) {
     // 'numero' agora é o ID da conversa (pode ser o LID: "691..._@lid")
-    // Usaremos este ID como a chave única para 'atendidos', 'etapas', e para enviar respostas.
+    // Usaremos este ID como a chave única para 'etapas' e para enviar respostas.
     const numero = message.from;
 
     // --- 🚀 INÍCIO DA CORREÇÃO (LID) ---
@@ -232,7 +219,8 @@ async function processUserMessage(message) {
         return; // Sai da função se não conseguir obter o contato
     }
 
-    const numeroTelefoneLimpo = contact.number; // Ex: "553298374229"
+    // *** ESTA É A VARIÁVEL-CHAVE PARA A CORREÇÃO DO LOG ***
+    const numeroTelefoneLimpo = contact.number; // Ex: "553299982517"
 
     // Se não conseguirmos o número (privacidade, bug, etc.), não podemos autorizar.
     if (!numeroTelefoneLimpo) {
@@ -252,8 +240,15 @@ async function processUserMessage(message) {
         return;
     }
 
+    // ===============================================================================
+    // *** ✅ INÍCIO DA CORREÇÃO PARA ATENDIDOS.JSON ***
+    // ===============================================================================
+    // 1. Pegue o ID permanente (@c.us) do contato.
+    const idPermanente = contact.id._serialized; // Ex: "553299775821@c.us"
+
     // CORRIGIDO: O segundo check (de 'staffs') também precisa usar o numeroTelefoneLimpo
-    if (!atendidos.includes(numero) && !staffs.some(staff => String(staff.telefone) === numeroTelefoneLimpo)) {
+    // 2. Verifique se o ID PERMANENTE já foi atendido
+    if (!atendidos.includes(idPermanente) && !staffs.some(staff => String(staff.telefone) === numeroTelefoneLimpo)) {
         const hora = new Date().getHours();
         const saudacaoBase = hora <= 12 ? 'Bom dia' : (hora <= 18 ? 'Boa tarde' : 'Boa noite');
         const saudacoesAlternativas = [
@@ -265,59 +260,66 @@ async function processUserMessage(message) {
         const saudacaoAleatoria = saudacoesAlternativas[Math.floor(Math.random() * saudacoesAlternativas.length)];
 
         await client.sendMessage(
-            message.from, // Usa o 'message.from' (o LID) para enviar
+            message.from, // Usa o 'message.from' (o LID da conversa) para enviar
             `${saudacaoBase}! ${saudacaoAleatoria}\n${MENU_TEXT}`
         );
 
-        atendidos.push(numero); // Salva o 'numero' (o LID) na lista.
+        // 3. Salve o ID PERMANENTE (@c.us) na lista de atendidos
+        atendidos.push(idPermanente); // <-- MUDANÇA PRINCIPAL
         fs.writeFileSync(ATENDIDOS_PATH, JSON.stringify(atendidos, null, 2));
         return;
     }
+    // ===============================================================================
+    // *** ✅ FIM DA CORREÇÃO PARA ATENDIDOS.JSON ***
+    // ===============================================================================
+
 
     const opcao = message.body.trim();
     let etapas = lerJson(ETAPAS_PATH, {});
 
+    // *********************************************************************************
+    // *** NOTA: O 'etapas[numero]' continua usando 'numero' (o LID). ISSO ESTÁ CORRETO!
+    // *** 'etapas' controla a CONVERSA ATUAL, não o usuário.
+    // *********************************************************************************
     if (etapas[numero] && etapas[numero].etapa) {
         const etapaAtual = etapas[numero].etapa;
 
         try {
             if (etapaAtual === 'pdv') {
-                // ✅ PADRONIZADO: Passa o 'representante'
                 await enviarResumoPDV(client, message, representante); 
-                await registrarUso(numero, 'Consulta de Tarefas PDV');
+              // LOG CORRIGIDO (usa numeroTelefoneLimpo)
+                await registrarUso(numeroTelefoneLimpo, 'Consulta de Tarefas PDV');
                 delete etapas[numero];
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
                 return;
             }
 
             if (etapaAtual === 'coleta_ttc') {
-                // (Este arquivo não foi padronizado, foi corrigido internamente)
                 await enviarColetaTtcPdv(client, message);
-                await registrarUso(numero, 'Consulta de Coleta TTC PDV');
+              // LOG CORRIGIDO (usa numeroTelefoneLimpo)
+                await registrarUso(numeroTelefoneLimpo, 'Consulta de Coleta TTC PDV');
                 delete etapas[numero];
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
                 return;
             }
             
             if (etapaAtual === 'giro_equipamentos') {
-                // ✅ PADRONIZADO: Passa o 'representante'
                 await enviarGiroEquipamentosPdv(client, message, representante);
-                await registrarUso(numero, 'Consulta de Giro de Equipamentos PDV');
+              // LOG CORRIGIDO (usa numeroTelefoneLimpo)
+                await registrarUso(numeroTelefoneLimpo, 'Consulta de Giro de Equipamentos PDV');
                 delete etapas[numero];
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
                 return;
             }
 
-
             if (etapaAtual === 'remuneracao') {
-                // (Este arquivo não foi padronizado, foi corrigido internamente)
                 await enviarRemuneracao(client, message);
-                await registrarUso(numero, 'Consulta de Remuneração');
+              // LOG CORRIGIDO (usa numeroTelefoneLimpo)
+              // (Nota: o log principal está no handler)
                 return;
             }
 
             if (etapaAtual === 'aguardandoEscolha') {
-                // (Este arquivo não precisou de correção)
                 await enviarListaContatos(client, message);
                 return;
             }
@@ -337,9 +339,9 @@ async function processUserMessage(message) {
             await client.sendSeen(numero);
             const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
             if (relatoriosProntos) {
-                // ✅ PADRONIZADO: Passa o 'representante'
                 await enviarRelatoriosPdf(client, message, representante);
-                await registrarUso(numero, 'Relatórios em PDF');
+              // LOG CORRIGIDO (usa numeroTelefoneLimpo)
+                await registrarUso(numeroTelefoneLimpo, 'Relatórios em PDF');
                 if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
                 delete usuariosAguardandoRelatorio[numero]; 
             } else {
@@ -353,9 +355,9 @@ async function processUserMessage(message) {
             await client.sendSeen(numero);
             const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
             if (relatoriosProntos) {
-                // ✅ PADRONIZADO: Passa o 'representante'
                 await enviarRelatoriosImagem(client, message, representante);
-                await registrarUso(numero, 'Relatórios em Imagem');
+              // LOG CORRIGIDO (usa numeroTelefoneLimpo)
+                await registrarUso(numeroTelefoneLimpo, 'Relatórios em Imagem');
                 if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
                 delete usuariosAguardandoRelatorio[numero];
             } else {
@@ -367,25 +369,29 @@ async function processUserMessage(message) {
         }
         case '3':
             await client.sendMessage(message.from, 'Certo, por favor descreva a sua demanda sem se esquecer do NB e caso necessário encaminhe prints para maior agilidade no atendimento.');
-            await registrarUso(numero, 'Suporte (Demanda Manual)');
+          // LOG CORRIGIDO (usa numeroTelefoneLimpo)
+            await registrarUso(numeroTelefoneLimpo, 'Suporte (Demanda Manual)');
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
         case '4':
-            // (Este arquivo não foi padronizado, foi corrigido internamente)
             await enviarRemuneracao(client, message);
+          // LOG CORRIGIDO (usa numeroTelefoneLimpo)
+          await registrarUso(numeroTelefoneLimpo, 'Iniciou Consulta Remuneração');
             break;
         case '5':
             await client.sendMessage(message.from, 'Por favor, envie o código do PDV que deseja consultar as tarefas! ENVIE APENAS OS NUMEROS');
             etapas[numero] = { etapa: 'pdv' };
             await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+          // LOG CORRIGIDO (usa numeroTelefoneLimpo)
+          await registrarUso(numeroTelefoneLimpo, 'Iniciou Consulta PDV');
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
         case '6':
-            // (Este arquivo não precisou de correção)
             await client.sendSeen(numero);
             await enviarListaContatos(client, message);
-            await registrarUso(numero, 'Lista de Contatos');
+          // LOG CORRIGIDO (usa numeroTelefoneLimpo)
+            await registrarUso(numeroTelefoneLimpo, 'Lista de Contatos');
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
         case '7': {
@@ -393,13 +399,15 @@ async function processUserMessage(message) {
             etapas[numero] = { etapa: 'coleta_ttc' };
             await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+          // LOG CORRIGIDO (usa numeroTelefoneLimpo)
+          await registrarUso(numeroTelefoneLimpo, 'Iniciou Coleta TTC');
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
         }
         case '8': {
-            // (Este arquivo já estava padronizado)
             await enviarCts(client, message, representante); 
-            await registrarUso(numero, 'Consulta de Bonificação CT por Setor');
+          // LOG CORRIGIDO (usa numeroTelefoneLimpo)
+            await registrarUso(numeroTelefoneLimpo, 'Consulta de Bonificação CT por Setor');
             break;
         }
         case '9': {
@@ -407,6 +415,8 @@ async function processUserMessage(message) {
             etapas[numero] = { etapa: 'giro_equipamentos' }; // Apenas define a etapa
             await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+          // LOG CORRIGIDO (usa numeroTelefoneLimpo)
+          await registrarUso(numeroTelefoneLimpo, 'Iniciou Giro Equipamentos');
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
         }
@@ -430,11 +440,10 @@ async function processUserMessage(message) {
                 delete etapas[numero].tentativasInvalidas;
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             }
-            await registrarUso(numero, 'Exibição do Menu');
+            await registrarUso(numeroTelefoneLimpo, 'Exibição do Menu');
             break;
     }
 }
-
 
 // ============================================================================================
 // === LISTENER PRINCIPAL PARA MENSAGENS RECEBIDAS ===
@@ -455,7 +464,6 @@ client.on('message', async message => {
     // Processa todas as outras mensagens (chats privados)
     await processUserMessage(message);
 });
-
 
 // Inicializa o cliente
 client.initialize();
