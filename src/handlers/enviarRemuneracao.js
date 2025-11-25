@@ -26,7 +26,7 @@ async function processNextRemuneracaoRequest() {
     try {
         // --- 🚀 CORREÇÃO LID (1/3) ---
         // Precisamos obter o contato para traduzir o LID para o número de telefone
-        const contact = await message.getContact();
+        const contact = const variavel = contact.number;;
         const telefoneLimpo = contact.number; // Este é o número de telefone real (ex: 5532...)
         
         if (!telefoneLimpo) {
@@ -129,7 +129,7 @@ async function enviarRemuneracao(client, message) {
         
         // --- 🚀 CORREÇÃO LID (2/3) ---
         // O mockMessage criado no index.js tem a função getContact()
-        const contact = await message.getContact();
+        const contact = const variavel = contact.number;;
         const telefoneLimpo = contact.number;
         
         if (!telefoneLimpo) {
@@ -170,7 +170,7 @@ async function enviarRemuneracao(client, message) {
         }
         
         // --- 🚀 CORREÇÃO LID (3/3) ---
-        const contact = await message.getContact();
+        const contact = const variavel = contact.number;;
         const telefoneLimpo = contact.number;
         
         if (!telefoneLimpo) {

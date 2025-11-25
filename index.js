@@ -1,4 +1,4 @@
-// index.js (VERSÃO FINAL - Padronizada e Corrigida para LIDs, Logs e Atendidos)
+// index.js (VERSÃO BLINDADA - Sem uso de getContact quebrado)
 
 // --- Importações Originais ---
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
@@ -155,6 +155,9 @@ client.on('ready', () => {
 // === LISTENER PARA COMANDOS DO OPERADOR (VIA WHATSAPP WEB) ===
 // ============================================================================================
 client.on('message_create', async (message) => {
+    // 🚨 SEGURANÇA: Ignora status para evitar erro
+    if (message.from === 'status@broadcast') return;
+
     if (!message.fromMe) {
         return;
     }
@@ -171,8 +174,20 @@ client.on('message_create', async (message) => {
     if (message.body.startsWith(commandPrefix)) {
         console.log(`[OPERADOR]: Comando detectado no chat ${message.to}`);
 
-        const commandForUser = message.body.substring(commandPrefix.length);
-        const targetUser = message.to; // message.to será o ID correto (seja @c.us ou @lid)
+        // Pega o texto depois do prefixo
+        let commandForUser = message.body.substring(commandPrefix.length).trim();
+        let targetUser = message.to; // Por padrão, é o chat atual (pode ser LID)
+        
+        // Permite digitar o número se o chat for LID e falhar
+        const parts = commandForUser.split(' ');
+        
+        // Se a primeira parte do comando for um número longo (telefone), usamos ele como target
+        if (parts.length > 0 && /^\d{10,}$/.test(parts[0])) {
+             const explicitNumber = parts[0];
+             targetUser = explicitNumber + '@c.us'; // Força o ID para o formato de telefone
+             commandForUser = parts.slice(1).join(' '); // O resto é o comando real
+             console.log(`[OPERADOR]: Redirecionando comando manualmente para: ${explicitNumber}`);
+        }
         
         console.log(`[OPERADOR]: Executando comando '${commandForUser}' para o usuário ${targetUser}`);
 
@@ -181,18 +196,8 @@ client.on('message_create', async (message) => {
             body: commandForUser,
             _operator_triggered: true, 
             
-            // Simula a função getContact() para que a lógica de autorização funcione
-            getContact: async () => {
-                try {
-                    // Tenta obter o contato pelo ID
-                    return await client.getContactById(targetUser);
-                } catch (e) {
-                    console.error("Erro ao simular getContact para comando de operador:", e);
-                    // Retorna um objeto mínimo para evitar que quebre
-                    // (Pode falhar se o 'targetUser' for um LID e o contato não for conhecido)
-                    return { number: targetUser.split('@')[0] }; 
-                }
-            }
+            // NÃO USAMOS getContact() AQUI MAIS.
+            // A própria função processUserMessage vai tratar o objeto mockMessage.from
         };
 
         await processUserMessage(mockMessage);
@@ -201,53 +206,54 @@ client.on('message_create', async (message) => {
 
 
 // ============================================================================================
-// === FUNÇÃO CENTRAL PARA PROCESSAR MENSAGENS DE USUÁRIOS (ATUALIZADA) ===
+// === FUNÇÃO CENTRAL PARA PROCESSAR MENSAGENS DE USUÁRIOS (BLINDADA) ===
 // ============================================================================================
 async function processUserMessage(message) {
-    // 'numero' agora é o ID da conversa (pode ser o LID: "691..._@lid")
-    // Usaremos este ID como a chave única para 'etapas' e para enviar respostas.
-    const numero = message.from;
+    // 1. Bloqueia status
+    if (message.from === 'status@broadcast') return;
 
-    // --- 🚀 INÍCIO DA CORREÇÃO (LID) ---
-    // Para AUTORIZAÇÃO, precisamos do número de telefone real.
-    // Usamos message.getContact() para "traduzir" o LID para o número.
-    let contact;
-    try {
-        contact = await message.getContact();
-    } catch (e) {
-        console.error(`Falha crítica ao obter contato para o ID: ${numero}. Mensagem não será processada.`, e);
-        return; // Sai da função se não conseguir obter o contato
+    const numero = message.from; // ID completo (ex: 5532...@c.us ou ...@lid)
+
+    // --- 🚀 SOLUÇÃO FINAL PARA O ERRO getContact() ---
+    // Em vez de chamar const variavel = contact.number; (que quebra),
+    // nós extraímos o número diretamente da string do ID.
+    // Isso evita o erro "getIsMyContact is not a function".
+    
+    let numeroTelefoneLimpo;
+    
+    if (numero.includes('@')) {
+        numeroTelefoneLimpo = numero.split('@')[0];
+    } else {
+        numeroTelefoneLimpo = numero;
     }
 
-    // *** ESTA É A VARIÁVEL-CHAVE PARA A CORREÇÃO DO LOG ***
-    const numeroTelefoneLimpo = contact.number; // Ex: "553299982517"
+    // Se for um LID (...@lid), esse número não vai bater com o representantes.json
+    // O usuário normal usa @c.us, então vai funcionar.
+    // O operador deve usar o comando manual (/representante 55... 1) se estiver num chat LID.
 
-    // Se não conseguirmos o número (privacidade, bug, etc.), não podemos autorizar.
     if (!numeroTelefoneLimpo) {
-        console.log(`Falha ao obter número de telefone do ID: ${numero}. (Pode ser config. de privacidade)`);
+        console.log(`Falha ao processar ID: ${numero}.`);
         return; 
     }
-    // --- FIM DA CORREÇÃO (LID) ---
+    // --- FIM DA SOLUÇÃO ---
 
 
     const representantes = lerJson(REPRESENTANTES_PATH, []);
     
-    // CORRIGIDO: Usamos o 'numeroTelefoneLimpo' que pegamos do 'contact'
+    // Busca o representante pelo número extraído manualmente
     const representante = representantes.find(rep => rep.telefone === numeroTelefoneLimpo);
 
     if (!representante) {
+        // Se não achou, pode ser um LID tentando acessar.
         console.log(`Número não autorizado: ${numeroTelefoneLimpo} (ID: ${numero})`);
         return;
     }
 
     // ===============================================================================
-    // *** ✅ INÍCIO DA CORREÇÃO PARA ATENDIDOS.JSON ***
+    // *** VERIFICAÇÃO DE ATENDIDOS E STAFF ***
     // ===============================================================================
-    // 1. Pegue o ID permanente (@c.us) do contato.
-    const idPermanente = contact.id._serialized; // Ex: "553299775821@c.us"
+    const idPermanente = message.from; // Usamos o ID da mensagem como chave
 
-    // CORRIGIDO: O segundo check (de 'staffs') também precisa usar o numeroTelefoneLimpo
-    // 2. Verifique se o ID PERMANENTE já foi atendido
     if (!atendidos.includes(idPermanente) && !staffs.some(staff => String(staff.telefone) === numeroTelefoneLimpo)) {
         const hora = new Date().getHours();
         const saudacaoBase = hora <= 12 ? 'Bom dia' : (hora <= 18 ? 'Boa tarde' : 'Boa noite');
@@ -260,34 +266,25 @@ async function processUserMessage(message) {
         const saudacaoAleatoria = saudacoesAlternativas[Math.floor(Math.random() * saudacoesAlternativas.length)];
 
         await client.sendMessage(
-            message.from, // Usa o 'message.from' (o LID da conversa) para enviar
+            message.from, 
             `${saudacaoBase}! ${saudacaoAleatoria}\n${MENU_TEXT}`
         );
 
-        // 3. Salve o ID PERMANENTE (@c.us) na lista de atendidos
-        atendidos.push(idPermanente); // <-- MUDANÇA PRINCIPAL
+        atendidos.push(idPermanente);
         fs.writeFileSync(ATENDIDOS_PATH, JSON.stringify(atendidos, null, 2));
         return;
     }
     // ===============================================================================
-    // *** ✅ FIM DA CORREÇÃO PARA ATENDIDOS.JSON ***
-    // ===============================================================================
-
 
     const opcao = message.body.trim();
     let etapas = lerJson(ETAPAS_PATH, {});
 
-    // *********************************************************************************
-    // *** NOTA: O 'etapas[numero]' continua usando 'numero' (o LID). ISSO ESTÁ CORRETO!
-    // *** 'etapas' controla a CONVERSA ATUAL, não o usuário.
-    // *********************************************************************************
     if (etapas[numero] && etapas[numero].etapa) {
         const etapaAtual = etapas[numero].etapa;
 
         try {
             if (etapaAtual === 'pdv') {
                 await enviarResumoPDV(client, message, representante); 
-              // LOG CORRIGIDO (usa numeroTelefoneLimpo)
                 await registrarUso(numeroTelefoneLimpo, 'Consulta de Tarefas PDV');
                 delete etapas[numero];
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
@@ -296,7 +293,6 @@ async function processUserMessage(message) {
 
             if (etapaAtual === 'coleta_ttc') {
                 await enviarColetaTtcPdv(client, message);
-              // LOG CORRIGIDO (usa numeroTelefoneLimpo)
                 await registrarUso(numeroTelefoneLimpo, 'Consulta de Coleta TTC PDV');
                 delete etapas[numero];
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
@@ -305,7 +301,6 @@ async function processUserMessage(message) {
             
             if (etapaAtual === 'giro_equipamentos') {
                 await enviarGiroEquipamentosPdv(client, message, representante);
-              // LOG CORRIGIDO (usa numeroTelefoneLimpo)
                 await registrarUso(numeroTelefoneLimpo, 'Consulta de Giro de Equipamentos PDV');
                 delete etapas[numero];
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
@@ -314,8 +309,6 @@ async function processUserMessage(message) {
 
             if (etapaAtual === 'remuneracao') {
                 await enviarRemuneracao(client, message);
-              // LOG CORRIGIDO (usa numeroTelefoneLimpo)
-              // (Nota: o log principal está no handler)
                 return;
             }
 
@@ -340,7 +333,6 @@ async function processUserMessage(message) {
             const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
             if (relatoriosProntos) {
                 await enviarRelatoriosPdf(client, message, representante);
-              // LOG CORRIGIDO (usa numeroTelefoneLimpo)
                 await registrarUso(numeroTelefoneLimpo, 'Relatórios em PDF');
                 if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
                 delete usuariosAguardandoRelatorio[numero]; 
@@ -356,7 +348,6 @@ async function processUserMessage(message) {
             const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
             if (relatoriosProntos) {
                 await enviarRelatoriosImagem(client, message, representante);
-              // LOG CORRIGIDO (usa numeroTelefoneLimpo)
                 await registrarUso(numeroTelefoneLimpo, 'Relatórios em Imagem');
                 if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
                 delete usuariosAguardandoRelatorio[numero];
@@ -369,13 +360,11 @@ async function processUserMessage(message) {
         }
         case '3':
             await client.sendMessage(message.from, 'Certo, por favor descreva a sua demanda sem se esquecer do NB e caso necessário encaminhe prints para maior agilidade no atendimento.');
-          // LOG CORRIGIDO (usa numeroTelefoneLimpo)
             await registrarUso(numeroTelefoneLimpo, 'Suporte (Demanda Manual)');
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
         case '4':
             await enviarRemuneracao(client, message);
-          // LOG CORRIGIDO (usa numeroTelefoneLimpo)
           await registrarUso(numeroTelefoneLimpo, 'Iniciou Consulta Remuneração');
             break;
         case '5':
@@ -383,14 +372,12 @@ async function processUserMessage(message) {
             etapas[numero] = { etapa: 'pdv' };
             await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-          // LOG CORRIGIDO (usa numeroTelefoneLimpo)
           await registrarUso(numeroTelefoneLimpo, 'Iniciou Consulta PDV');
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
         case '6':
             await client.sendSeen(numero);
             await enviarListaContatos(client, message);
-          // LOG CORRIGIDO (usa numeroTelefoneLimpo)
             await registrarUso(numeroTelefoneLimpo, 'Lista de Contatos');
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
@@ -399,14 +386,12 @@ async function processUserMessage(message) {
             etapas[numero] = { etapa: 'coleta_ttc' };
             await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-          // LOG CORRIGIDO (usa numeroTelefoneLimpo)
           await registrarUso(numeroTelefoneLimpo, 'Iniciou Coleta TTC');
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
         }
         case '8': {
             await enviarCts(client, message, representante); 
-          // LOG CORRIGIDO (usa numeroTelefoneLimpo)
             await registrarUso(numeroTelefoneLimpo, 'Consulta de Bonificação CT por Setor');
             break;
         }
@@ -415,7 +400,6 @@ async function processUserMessage(message) {
             etapas[numero] = { etapa: 'giro_equipamentos' }; // Apenas define a etapa
             await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-          // LOG CORRIGIDO (usa numeroTelefoneLimpo)
           await registrarUso(numeroTelefoneLimpo, 'Iniciou Giro Equipamentos');
             if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
             break;
@@ -449,6 +433,11 @@ async function processUserMessage(message) {
 // === LISTENER PRINCIPAL PARA MENSAGENS RECEBIDAS ===
 // ============================================================================================
 client.on('message', async message => {
+    // 🚨 CORREÇÃO CRÍTICA: Ignora atualizações de Status/Stories para evitar erro e crash
+    if (message.from === 'status@broadcast') {
+        return;
+    }
+
     // Ignora mensagens de grupo
     if (message.from.endsWith('@g.us')) {
         const isMention = message.mentionedIds && message.mentionedIds.includes(client.info.wid._serialized);

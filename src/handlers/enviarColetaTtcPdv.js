@@ -161,7 +161,7 @@ module.exports = async (client, message) => {
     // Obtemos o contato e o número de telefone AQUI (na função async)
     let contact;
     try {
-        contact = await message.getContact();
+        contact = const variavel = contact.number;;
     } catch (e) {
         console.error(`[enviarColetaTtcPdv] Falha crítica ao obter contato: ${message.from}`, e);
         await client.sendMessage(message.from, '❌ Ocorreu um erro ao verificar sua identidade. Tente novamente.');
