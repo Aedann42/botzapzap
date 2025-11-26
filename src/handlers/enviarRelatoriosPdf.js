@@ -1,138 +1,76 @@
-// enviarRelatoriosPdf.js (PADRONIZADO)
-const path = require('path');
+// src/handlers/enviarRelatoriosPdf.js (VERSÃO FINAL - COM LÓGICA GV + SETOR)
+
 const fs = require('fs');
+const path = require('path');
 const { MessageMedia } = require('whatsapp-web.js');
 
-/**
- * Verifica se um arquivo deve ser enviado com base na extensão.
- * (Função auxiliar inalterada)
- */
-function isArquivoValidoParaEnvio(nomeArquivo) {
-    const extensoesBloqueadas = ['.webp', '.db'];
-    const extensao = path.extname(nomeArquivo).toLowerCase();
-    return !extensoesBloqueadas.includes(extensao);
-}
+async function enviarRelatoriosPdf(client, message, representante) {
+    const numero = message.from;
 
-// --- Variáveis para Gerenciamento da Fila ---
-let isSendingPdfReports = false;
-const pdfReportSendQueue = [];
-
-// --- Função para processar a próxima requisição na fila ---
-async function processNextPdfReportSendRequest() {
-    if (pdfReportSendQueue.length === 0) {
-        isSendingPdfReports = false;
-        return;
-    }
-
-    const nextRequest = pdfReportSendQueue.shift();
-    isSendingPdfReports = true;
-
-    // ✅ CORREÇÃO: Desestruturamos o 'representante' para usar no log
-    const { client, message, arquivosParaEnviar, nomePastaGeral, representante } = nextRequest;
+    // 🚨 AJUSTE O CAMINHO BASE CONFORME NECESSÁRIO
+    const BASE_PATH = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\11 - NOVEMBRO\_GERADOR PDF\ACOMPS`;
     
-    // ✅ CORREÇÃO: Usamos o telefone do representante para o log
-    const numeroLimpoParaLog = representante ? representante.telefone : message.from.split('@')[0];
-
     try {
-        await client.sendMessage(message.from, '🔄 Enviando relatórios, aguarde...');
-
-        for (const caminhoCompleto of arquivosParaEnviar) {
-            if (!fs.existsSync(caminhoCompleto)) {
-                console.warn(`⚠️ Arquivo não encontrado para envio: ${caminhoCompleto}`);
-                continue;
-            }
-            
-            const media = MessageMedia.fromFilePath(caminhoCompleto);
-            const nomeArquivo = path.basename(caminhoCompleto);
-
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            await client.sendMessage(message.from, media, {
-                caption: nomeArquivo,
-                sendMediaAsDocument: true
-            });
+        if (!representante || !representante.setor) {
+            console.log(`[PDF] Erro: Setor não definido para ${numero}`);
+            await client.sendMessage(numero, '❌ Não consegui identificar seu setor no cadastro.');
+            return;
         }
 
-        await client.sendMessage(message.from, '✅ Relatórios enviados com sucesso.');
+        const setor = representante.setor.toString(); // Ex: "411"
+        const primeiroDigito = setor.charAt(0);       // Ex: "4"
+        const pastaGV = `GV${primeiroDigito}`;        // Ex: "GV4"
 
-        // ✅ LOG FINAL CORRIGIDO
-        console.log(`[${path.basename(__filename)}] Envio concluído para ${numeroLimpoParaLog}: ${arquivosParaEnviar.length} arquivos enviados ${nomePastaGeral ? `(usando pasta geral ${nomePastaGeral})` : '(sem pasta geral)'}.`);
+        // Lista de pastas para verificar: [Pasta do Setor, Pasta do Gerente]
+        const pastasParaVerificar = [
+            { nome: setor, caminho: path.join(BASE_PATH, setor) },
+            { nome: pastaGV, caminho: path.join(BASE_PATH, pastaGV) }
+        ];
 
-    } catch (error) {
-        console.error('❌ Erro ao enviar relatórios:', error);
-        await client.sendMessage(message.from, '❌ Ocorreu um erro ao enviar os relatórios. Tente novamente mais tarde.');
-    } finally {
-        processNextPdfReportSendRequest();
-    }
-}
+        let totalArquivosEncontrados = 0;
 
-// --- Função Principal Exportada (PADRONIZADA) ---
-// ✅ ALTERADO: Agora recebe 'representante' como parâmetro
-module.exports = async function enviarRelatoriosPdf(client, message, representante) {
-    
-    // --- 🚀 LÓGICA DE AUTORIZAÇÃO ATUALIZADA ---
-    // A lógica de 'const numero = message.from.replace...' foi REMOVIDA.
-    // Usamos o objeto 'representante' que foi injetado.
+        await client.sendMessage(numero, '📄 Buscando seus relatórios em PDF...');
 
-    if (!representante || !representante.setor) {
-        // Verificação de segurança
-        console.error(`[RelatoriosPdf] Erro: Objeto 'representante' (ou seu setor) está faltando para ${message.from}.`);
-        await client.sendMessage(message.from, 'Seu número não está cadastrado ou seu setor não foi definido. Avise o APR.');
-        return;
-    }
-    // --- FIM DA ATUALIZAÇÃO ---
-
-
-    const pastaBase = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\11 - NOVEMBRO\_GERADOR PDF\ACOMPS`;
-    
-    // ✅ CORRIGIDO: Usa o setor do 'representante' injetado
-    const pastaSetor = path.join(pastaBase, String(representante.setor));
-    let arquivosParaEnviar = [];
-
-    if (fs.existsSync(pastaSetor)) {
-        const arquivosDoSetor = fs.readdirSync(pastaSetor);
-        arquivosDoSetor.forEach(arquivo => {
-            if (isArquivoValidoParaEnvio(arquivo)) {
-                arquivosParaEnviar.push(path.join(pastaSetor, arquivo));
+        // Loop para varrer as duas pastas (Setor e GV)
+        for (const pasta of pastasParaVerificar) {
+            
+            if (!fs.existsSync(pasta.caminho)) {
+                console.log(`[PDF] Pasta não encontrada: ${pasta.caminho}`);
+                // Não damos return aqui, pois pode existir a outra pasta
+                continue; 
             }
-        });
-    }
 
-    // ✅ CORRIGIDO: Usa o setor do 'representante' injetado
-    const setorStr = String(representante.setor);
-    const primeiroDigito = setorStr[0];
-    let nomePastaGeral = null;
+            const arquivos = fs.readdirSync(pasta.caminho);
+            // Filtra apenas arquivos .pdf
+            const arquivosPdf = arquivos.filter(file => file.toLowerCase().endsWith('.pdf'));
 
-    switch (primeiroDigito) {
-        case '1': nomePastaGeral = 'GV1'; break;
-        case '2': nomePastaGeral = 'GV2'; break;
-        case '3': nomePastaGeral = 'GV3'; break;
-        case '4': case '5': case '6': case '7': case '8': case '9': nomePastaGeral = 'GV4'; break;
-    }
+            if (arquivosPdf.length > 0) {
+                console.log(`[PDF] Enviando ${arquivosPdf.length} arquivos da pasta ${pasta.nome}`);
+                
+                for (const file of arquivosPdf) {
+                    const caminhoCompleto = path.join(pasta.caminho, file);
+                    
+                    // Ignora arquivos temporários
+                    if (file.startsWith('~') || file.toLowerCase() === 'thumbs.db') continue;
 
-    if (nomePastaGeral) {
-        const caminhoPastaGeral = path.join(pastaBase, nomePastaGeral);
-        if (fs.existsSync(caminhoPastaGeral)) {
-            const arquivosDaPastaGeral = fs.readdirSync(caminhoPastaGeral);
-            for (const nomeArquivo of arquivosDaPastaGeral.reverse()) {
-                if (isArquivoValidoParaEnvio(nomeArquivo)) {
-                    arquivosParaEnviar.unshift(path.join(caminhoPastaGeral, nomeArquivo));
+                    const media = MessageMedia.fromFilePath(caminhoCompleto);
+                    await client.sendMessage(numero, media, { caption: file });
+                    totalArquivosEncontrados++;
                 }
             }
         }
-    }
 
-    if (arquivosParaEnviar.length === 0) {
-        await client.sendMessage(message.from, 'Nenhum documento válido encontrado para seu setor.');
-        return;
-    }
-    
-    // ✅ CORREÇÃO: Passa o 'representante' para a fila (para o log)
-    pdfReportSendQueue.push({ client, message, arquivosParaEnviar, nomePastaGeral, representante });
+        if (totalArquivosEncontrados === 0) {
+            await client.sendMessage(numero, `⚠️ Nenhum relatório PDF encontrado hoje (Verifiquei nas pastas: ${setor} e ${pastaGV}).`);
+        } else {
+            // Opcional: Avisar que terminou
+            await client.sendMessage(numero, '✅ Envio de PDFs concluído.');
+        }
 
-    if (!isSendingPdfReports) {
-        processNextPdfReportSendRequest();
-    } else {
-        await client.sendMessage(message.from, 'Já estou enviando outros relatórios. Você foi adicionado à fila e seus arquivos serão enviados em breve.');
+    } catch (error) {
+        console.error('[PDF] Erro crítico:', error);
+        await client.sendMessage(numero, '❌ Ocorreu um erro ao buscar os relatórios PDF.');
     }
-};
+}
+
+module.exports = enviarRelatoriosPdf;

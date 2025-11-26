@@ -1,6 +1,6 @@
-// index.js (VERSÃO BLINDADA - Sem uso de getContact quebrado)
+// index.js (VERSÃO FINAL COMPLETA - ORDEM CORRIGIDA + DEBUG)
 
-// --- Importações Originais ---
+// --- Importações ---
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
@@ -8,16 +8,18 @@ const path = require('path');
 const cron = require('node-cron');
 
 const verificarArquivoAtualizado = require('./src/services/checkDateReports.js');
-const { lerJson, registrarUso, REPRESENTANTES_PATH, ETAPAS_PATH, ATENDIDOS_PATH, STAFFS_PATH } = require('./src/utils/dataHandler.js');
+const { lerJson, registrarUso, ETAPAS_PATH, ATENDIDOS_PATH, STAFFS_PATH } = require('./src/utils/dataHandler.js');
 
-// IMPORTANTE: Estes caminhos devem ser acessíveis (leitura) pelo servidor onde o bot está rodando.
+// 🚨 CAMINHO FORÇADO PARA O JSON (PASTA DATA)
+const CAMINHO_JSON_REAL = path.join(__dirname, 'data', 'representantes.json');
+
+// IMPORTANTE: Estes caminhos devem ser acessíveis (leitura) pelo servidor
 const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\11 - NOVEMBRO\\_GERADOR PDF\\ACOMPS\\410\\410_MKTPTT.pdf';
 const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\11 - NOVEMBRO\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_3.jpg'
 
-// Importação do texto do menu
 const MENU_TEXT = require('./src/config/menuOptions');
 
-// Importações dos módulos de funcionalidade
+// Handlers
 const enviarRelatoriosImagem = require('./src/handlers/enviarRelatoriosImagem');
 const enviarRelatoriosPdf = require('./src/handlers/enviarRelatoriosPdf');
 const enviarRemuneracao = require('./src/handlers/enviarRemuneracao');
@@ -29,17 +31,14 @@ const enviarCts = require('./src/handlers/enviarCts');
 const enviarGiroEquipamentosPdv = require('./src/handlers/enviarGiroEquipamentosPdv');
 const lembretePonto = require('./src/handlers/lembretePonto'); 
 
+// Variáveis de Estado
 let atendidos = lerJson(ATENDIDOS_PATH, []);
 const staffs = lerJson(STAFFS_PATH, []);
-
-// Objeto que armazena usuários em espera: { 'lid_do_usuario@lid': 'pdf' | 'imagem' }
 const usuariosAguardandoRelatorio = {};
 
-// Inicialização do cliente WhatsApp
+// 1. INICIALIZAÇÃO DO CLIENTE (Obrigatório vir antes dos listeners)
 const client = new Client({
-    authStrategy: new LocalAuth({
-        dataPath: '.session'
-    }),
+    authStrategy: new LocalAuth({ dataPath: '.session' }),
     webCacheType: 'remote', 
     puppeteer: {
         headless: true,
@@ -52,152 +51,155 @@ client.on('qr', qr => qrcode.generate(qr, { small: true }));
 client.on('ready', () => {
     console.log('✅ Bot conectado!');
     
-    // ============================================================================================
-    // === AGENDAMENTO NODE-CRON PARA LEMBRETES DE PONTO ===
-    // ============================================================================================
-    const TIMEZONE = "America/Sao_Paulo"; // Defina o fuso horário correto
-    
+    // Verifica se o arquivo existe no caminho forçado
+    if (fs.existsSync(CAMINHO_JSON_REAL)) {
+        console.log(`📂 JSON de Representantes carregado de: ${CAMINHO_JSON_REAL}`);
+    } else {
+        console.error(`❌ ERRO CRÍTICO: Arquivo não encontrado em: ${CAMINHO_JSON_REAL}`);
+    }
+
+    // === AGENDAMENTOS (CRON) ===
+    const TIMEZONE = "America/Sao_Paulo";
     console.log('[AGENDADOR]: Configurando lembretes de ponto...');
 
-    // 1. 7:55 - Início da jornada
-    cron.schedule('55 7 * * 1-5', () => { // De Segunda a Sexta
-        lembretePonto(client, '7:55');
-    }, {
-        timezone: TIMEZONE
-    });
-
-    // 2. 12:00 - Saída para almoço
-    cron.schedule('0 12 * * 1-5', () => { 
-        lembretePonto(client, '12:00');
-    }, {
-        timezone: TIMEZONE
-    });
-
-    // 4. 17:45 - Encerramento da jornada
-    cron.schedule('45 17 * * 1-5', () => {
-        lembretePonto(client, '17:45');
-    }, {
-        timezone: TIMEZONE
-    });
+    cron.schedule('55 7 * * 1-5', () => { lembretePonto(client, '7:55'); }, { timezone: TIMEZONE });
+    cron.schedule('0 12 * * 1-5', () => { lembretePonto(client, '12:00'); }, { timezone: TIMEZONE });
+    cron.schedule('45 17 * * 1-5', () => { lembretePonto(client, '17:45'); }, { timezone: TIMEZONE });
     
-    console.log('[AGENDADOR]: Agendamentos de ponto configurados com sucesso.');
-    // ============================================================================================
-    
-    
-    // ============================================================================================
-    // === VERIFICADOR DE ARQUIVOS (setInterval) ===
-    // ============================================================================================
-    const INTERVALO_VERIFICACAO = 3 * 60 * 1000; // 3 minutos
+    console.log('[AGENDADOR]: Agendamentos configurados.');
 
+    // === VERIFICADOR DE ARQUIVOS ===
+    const INTERVALO_VERIFICACAO = 3 * 60 * 1000; 
     setInterval(async () => {
-        if (Object.keys(usuariosAguardandoRelatorio).length === 0) {
-            return;
-        }
+        if (Object.keys(usuariosAguardandoRelatorio).length === 0) return;
 
-        console.log(`[VERIFICADOR]: Checando relatórios para ${Object.keys(usuariosAguardandoRelatorio).length} usuários em espera...`);
+        console.log(`[VERIFICADOR]: Checando para ${Object.keys(usuariosAguardandoRelatorio).length} usuários...`);
 
         try {
-            // 1. Checa o status de AMBOS os tipos de relatório
             const pdfPronto = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
             const imagemPronta = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
 
             if (!pdfPronto && !imagemPronta) {
-                console.log('[VERIFICADOR]: Nenhum relatório disponível ainda.');
+                console.log('[VERIFICADOR]: Nada ainda.');
                 return;
             }
 
-            const notificados = []; // Lista para armazenar quem foi notificado
-
-            // 2. Itera sobre o objeto de usuários em espera
+            const notificados = [];
             for (const userNumero in usuariosAguardandoRelatorio) {
                 const tipoEsperado = usuariosAguardandoRelatorio[userNumero];
 
-                // 3. Verifica se o relatório esperado pelo usuário está pronto e ENVIA
                 if (tipoEsperado === 'pdf' && pdfPronto) {
-                    console.log(`[VERIFICADOR]: PDF pronto para ${userNumero}. Notificando e ENVIANDO...`);
-                    
                     const mediaPdf = MessageMedia.fromFilePath(CAMINHO_CHECK_PDF); 
-                    await client.sendMessage(userNumero, mediaPdf, { 
-                        caption: "🎉 Boa notícia! Seu relatório em PDF solicitado já está disponível." 
-                    });
-                    
-                    notificados.push(userNumero); // Adiciona à lista para remoção
-                    
+                    await client.sendMessage(userNumero, mediaPdf, { caption: "🎉 Seu relatório PDF chegou!" });
+                    notificados.push(userNumero);
                 } else if (tipoEsperado === 'imagem' && imagemPronta) {
-                    console.log(`[VERIFICADOR]: Imagem pronta para ${userNumero}. Notificando e ENVIANDO...`);
-                    
                     const mediaImagem = MessageMedia.fromFilePath(CAMINHO_CHECK_IMAGEM);
-                    await client.sendMessage(userNumero, mediaImagem, { 
-                        caption: "🎉 Boa notícia! Seu relatório em Imagem solicitado já está disponível." 
-                    });
-                    
-                    notificados.push(userNumero); // Adiciona à lista para remoção
+                    await client.sendMessage(userNumero, mediaImagem, { caption: "🎉 Seu relatório Imagem chegou!" });
+                    notificados.push(userNumero);
                 }
             }
 
-            // 4. Remove APENAS os usuários que foram notificados da lista de espera
             if (notificados.length > 0) {
-                for (const userNumero of notificados) {
-                    delete usuariosAguardandoRelatorio[userNumero];
-                }
-                console.log(`[VERIFICADOR]: ${notificados.length} usuários notificados e removidos da lista.`);
+                for (const user of notificados) delete usuariosAguardandoRelatorio[user];
             }
-
         } catch (error) {
-            console.error('[VERIFICADOR]: Erro ao checar arquivos ou enviar:', error);
+            console.error('[VERIFICADOR]: Erro:', error);
         }
-
     }, INTERVALO_VERIFICACAO);
-    // ============================================================================================
 });
 
 // ============================================================================================
-// === LISTENER PARA COMANDOS DO OPERADOR (VIA WHATSAPP WEB) ===
+// === LISTENER DO OPERADOR (COMPARADOR FLEXÍVEL) ===
 // ============================================================================================
 client.on('message_create', async (message) => {
-    // 🚨 SEGURANÇA: Ignora status para evitar erro
+    // 🚨 SEGURANÇA: Ignora status
     if (message.from === 'status@broadcast') return;
+    if (!message.fromMe) return;
 
-    if (!message.fromMe) {
+    const body = message.body.trim(); 
+
+    if (body.toLowerCase() === '/ativar') {
+        console.log('[OPERADOR]: /ativar');
+        await client.sendMessage(message.to, '🤖 Iniciando ativação...');
+        const res = await enviarMenuAtivacao(client);
+        await client.sendMessage(message.to, `✅ ${res}`);
         return;
     }
 
-    if (message.body.trim() === '/ativar') {
-        console.log('[OPERADOR]: Comando /ativar recebido.');
-        await client.sendMessage(message.to, '🤖 Iniciando campanha de ativação para novos representantes... Avisarei quando terminar.');
-        const resultado = await enviarMenuAtivacao(client);
-        await client.sendMessage(message.to, `✅ ${resultado}`);
-        return;
-    }
+    const prefixosAceitos = ['/representante', '/rep', '/admin'];
+    const prefixoUsado = prefixosAceitos.find(p => body.toLowerCase().startsWith(p));
 
-    const commandPrefix = '/representante ';
-    if (message.body.startsWith(commandPrefix)) {
-        console.log(`[OPERADOR]: Comando detectado no chat ${message.to}`);
-
-        // Pega o texto depois do prefixo
-        let commandForUser = message.body.substring(commandPrefix.length).trim();
-        let targetUser = message.to; // Por padrão, é o chat atual (pode ser LID)
-        
-        // Permite digitar o número se o chat for LID e falhar
-        const parts = commandForUser.split(' ');
-        
-        // Se a primeira parte do comando for um número longo (telefone), usamos ele como target
-        if (parts.length > 0 && /^\d{10,}$/.test(parts[0])) {
-             const explicitNumber = parts[0];
-             targetUser = explicitNumber + '@c.us'; // Força o ID para o formato de telefone
-             commandForUser = parts.slice(1).join(' '); // O resto é o comando real
-             console.log(`[OPERADOR]: Redirecionando comando manualmente para: ${explicitNumber}`);
+    if (prefixoUsado) {
+        let args = body.substring(prefixoUsado.length).trim();
+        if (!args) {
+            console.log('[OPERADOR]: Use /rep [NUMERO] [COMANDO]');
+            return;
         }
-        
-        console.log(`[OPERADOR]: Executando comando '${commandForUser}' para o usuário ${targetUser}`);
+
+        let targetUser = message.to; 
+        let commandForUser = args;   
+
+        // Tenta extrair um número explicito no comando
+        const primeiroEspaco = args.indexOf(' ');
+        let possivelNumero = '';
+        let restoDoComando = '';
+
+        if (primeiroEspaco > -1) {
+            possivelNumero = args.substring(0, primeiroEspaco).replace(/\D/g, ''); 
+            restoDoComando = args.substring(primeiroEspaco).trim();
+        } else {
+            possivelNumero = args.replace(/\D/g, ''); 
+        }
+
+        // === AUTO-SAVE: FORÇA BRUTA ===
+        if (possivelNumero.length >= 10) {
+            console.log(`[OPERADOR]: Comando manual para telefone: ${possivelNumero}`);
+            
+            // Se o chat atual for LID
+            if (targetUser.includes('@lid')) {
+                console.log(`[AUTO-LEARN]: Tentando vincular LID ${targetUser} ao telefone ${possivelNumero}...`);
+                
+                try {
+                    const rawData = fs.readFileSync(CAMINHO_JSON_REAL, 'utf-8');
+                    const representantes = JSON.parse(rawData);
+
+                    // COMPARADOR FLEXÍVEL (Converte tudo para string e tira espaços)
+                    const index = representantes.findIndex(r => 
+                        String(r.telefone).trim() === String(possivelNumero).trim()
+                    );
+
+                    if (index !== -1) {
+                        // Só salva se for diferente
+                        if (representantes[index].lid !== targetUser) {
+                            representantes[index].lid = targetUser;
+                            fs.writeFileSync(CAMINHO_JSON_REAL, JSON.stringify(representantes, null, 4));
+                            console.log(`✅ [AUTO-LEARN]: SUCESSO! JSON Atualizado.`);
+                            await client.sendMessage(message.to, `🤖 [SISTEMA] Vínculo salvo!`);
+                        } else {
+                            console.log(`ℹ️ [AUTO-LEARN]: Este LID já estava salvo corretamente.`);
+                        }
+                    } else {
+                        console.log(`❌ [AUTO-LEARN]: Telefone ${possivelNumero} não encontrado no JSON.`);
+                        
+                        // LOG DE DIAGNÓSTICO
+                        console.log("   -> Exemplo de telefone no JSON:", representantes[0]?.telefone);
+                    }
+                } catch (err) {
+                    console.error(`❌ [AUTO-LEARN]: Erro ao gravar:`, err);
+                }
+            }
+
+            // Redireciona o fluxo para o número limpo
+            targetUser = possivelNumero + '@c.us'; 
+            commandForUser = restoDoComando;       
+        }
+
+        console.log(`[OPERADOR]: Executando '${commandForUser}' como ${targetUser}`);
 
         const mockMessage = {
             from: targetUser,
-            body: commandForUser,
-            _operator_triggered: true, 
-            
-            // NÃO USAMOS getContact() AQUI MAIS.
-            // A própria função processUserMessage vai tratar o objeto mockMessage.from
+            body: commandForUser || 'menu',
+            _operator_triggered: true
         };
 
         await processUserMessage(mockMessage);
@@ -206,69 +208,57 @@ client.on('message_create', async (message) => {
 
 
 // ============================================================================================
-// === FUNÇÃO CENTRAL PARA PROCESSAR MENSAGENS DE USUÁRIOS (BLINDADA) ===
+// === PROCESSADOR DE MENSAGENS (BLINDADO - LÊ DO PATH CORRETO) ===
 // ============================================================================================
 async function processUserMessage(message) {
-    // 1. Bloqueia status
     if (message.from === 'status@broadcast') return;
 
-    const numero = message.from; // ID completo (ex: 5532...@c.us ou ...@lid)
+    const numero = message.from; 
 
-    // --- 🚀 SOLUÇÃO FINAL PARA O ERRO getContact() ---
-    // Em vez de chamar const variavel = contact.number; (que quebra),
-    // nós extraímos o número diretamente da string do ID.
-    // Isso evita o erro "getIsMyContact is not a function".
-    
+    // Extração manual de segurança
     let numeroTelefoneLimpo;
-    
     if (numero.includes('@')) {
         numeroTelefoneLimpo = numero.split('@')[0];
     } else {
         numeroTelefoneLimpo = numero;
     }
 
-    // Se for um LID (...@lid), esse número não vai bater com o representantes.json
-    // O usuário normal usa @c.us, então vai funcionar.
-    // O operador deve usar o comando manual (/representante 55... 1) se estiver num chat LID.
+    if (!numeroTelefoneLimpo) return; 
 
-    if (!numeroTelefoneLimpo) {
-        console.log(`Falha ao processar ID: ${numero}.`);
-        return; 
+    // Lê o JSON atualizado DIRETAMENTE DA FONTE
+    let representantes = [];
+    try {
+        const rawData = fs.readFileSync(CAMINHO_JSON_REAL, 'utf-8');
+        representantes = JSON.parse(rawData);
+    } catch (e) {
+        console.error('Erro ao ler representantes:', e);
     }
-    // --- FIM DA SOLUÇÃO ---
-
-
-    const representantes = lerJson(REPRESENTANTES_PATH, []);
     
-    // Busca o representante pelo número extraído manualmente
-    const representante = representantes.find(rep => rep.telefone === numeroTelefoneLimpo);
+    // BUSCA HÍBRIDA: Telefone OU LID
+    const representante = representantes.find(rep => 
+        String(rep.telefone).trim() === String(numeroTelefoneLimpo).trim() || 
+        (rep.lid && rep.lid === numero)
+    );
 
     if (!representante) {
-        // Se não achou, pode ser um LID tentando acessar.
         console.log(`Número não autorizado: ${numeroTelefoneLimpo} (ID: ${numero})`);
         return;
     }
 
     // ===============================================================================
-    // *** VERIFICAÇÃO DE ATENDIDOS E STAFF ***
-    // ===============================================================================
-    const idPermanente = message.from; // Usamos o ID da mensagem como chave
+    // Verifica Atendidos / Staff
+    const idPermanente = message.from; 
 
     if (!atendidos.includes(idPermanente) && !staffs.some(staff => String(staff.telefone) === numeroTelefoneLimpo)) {
         const hora = new Date().getHours();
         const saudacaoBase = hora <= 12 ? 'Bom dia' : (hora <= 18 ? 'Boa tarde' : 'Boa noite');
         const saudacoesAlternativas = [
-            'Tudo certo por aí?', 'Como vai você?', 'Tudo bem por aí?',
-            'Espero que esteja tudo em ordem.', 'Como posso ajudar?',
-            'Fico feliz em receber sua mensagem.', 'É um prazer falar com você.',
-            'Estou à disposição para ajudar.', 'O que mandas?', 'Que bom receber seu contato.'
+            'Como posso ajudar?', 'Tudo bem por aí?', 'É um prazer falar com você.',
+            'Estou à disposição.', 'O que mandas?', 'Que bom receber seu contato.'
         ];
         const saudacaoAleatoria = saudacoesAlternativas[Math.floor(Math.random() * saudacoesAlternativas.length)];
 
-        await client.sendMessage(
-            message.from, 
-            `${saudacaoBase}! ${saudacaoAleatoria}\n${MENU_TEXT}`
-        );
+        await client.sendMessage(message.from, `${saudacaoBase}! ${saudacaoAleatoria}\n${MENU_TEXT}`);
 
         atendidos.push(idPermanente);
         fs.writeFileSync(ATENDIDOS_PATH, JSON.stringify(atendidos, null, 2));
@@ -285,193 +275,140 @@ async function processUserMessage(message) {
         try {
             if (etapaAtual === 'pdv') {
                 await enviarResumoPDV(client, message, representante); 
-                await registrarUso(numeroTelefoneLimpo, 'Consulta de Tarefas PDV');
+                await registrarUso(numeroTelefoneLimpo, 'Consulta PDV');
                 delete etapas[numero];
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
                 return;
             }
-
             if (etapaAtual === 'coleta_ttc') {
                 await enviarColetaTtcPdv(client, message);
-                await registrarUso(numeroTelefoneLimpo, 'Consulta de Coleta TTC PDV');
+                await registrarUso(numeroTelefoneLimpo, 'Consulta TTC');
                 delete etapas[numero];
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
                 return;
             }
-            
             if (etapaAtual === 'giro_equipamentos') {
                 await enviarGiroEquipamentosPdv(client, message, representante);
-                await registrarUso(numeroTelefoneLimpo, 'Consulta de Giro de Equipamentos PDV');
+                await registrarUso(numeroTelefoneLimpo, 'Consulta Giro');
                 delete etapas[numero];
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
                 return;
             }
-
             if (etapaAtual === 'remuneracao') {
                 await enviarRemuneracao(client, message);
                 return;
             }
-
             if (etapaAtual === 'aguardandoEscolha') {
                 await enviarListaContatos(client, message);
                 return;
             }
         } catch (error) {
-            console.error(`Erro ao processar etapa "${etapaAtual}" para ${numero}:`, error);
-            await client.sendMessage(numero, '❌ Ocorreu um erro ao processar sua solicitação. Por favor, tente novamente.');
+            console.error(`Erro etapa "${etapaAtual}" para ${numero}:`, error);
+            await client.sendMessage(numero, '❌ Erro ao processar. Tente novamente.');
             delete etapas[numero];
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             return;
         }
     }
 
-    const MENSAGEM_RELATORIOS_INDISPONIVEIS = '⚠️  Relatórios ainda não gerados. Vou te avisar assim que estiverem disponíveis! 🤖';
+    const MSG_INDISPONIVEL = '⚠️ Relatórios ainda não gerados. Avisarei quando estiverem prontos! 🤖';
 
     switch (opcao.toLowerCase()) {
         case '1': { 
             await client.sendSeen(numero);
-            const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
-            if (relatoriosProntos) {
+            const pronto = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
+            if (pronto) {
                 await enviarRelatoriosPdf(client, message, representante);
-                await registrarUso(numeroTelefoneLimpo, 'Relatórios em PDF');
+                await registrarUso(numeroTelefoneLimpo, 'Relatório PDF');
                 if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
                 delete usuariosAguardandoRelatorio[numero]; 
             } else {
-                await client.sendMessage(message.from, MENSAGEM_RELATORIOS_INDISPONIVEIS);
+                await client.sendMessage(message.from, MSG_INDISPONIVEL);
                 usuariosAguardandoRelatorio[numero] = 'pdf';
-                console.log(`Usuário ${numero} adicionado à lista de espera para relatórios.`);
             }
             break;
         }
         case '2': {
             await client.sendSeen(numero);
-            const relatoriosProntos = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
-            if (relatoriosProntos) {
+            const pronto = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
+            if (pronto) {
                 await enviarRelatoriosImagem(client, message, representante);
-                await registrarUso(numeroTelefoneLimpo, 'Relatórios em Imagem');
+                await registrarUso(numeroTelefoneLimpo, 'Relatório Imagem');
                 if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
                 delete usuariosAguardandoRelatorio[numero];
             } else {
-                await client.sendMessage(message.from, MENSAGEM_RELATORIOS_INDISPONIVEIS);
+                await client.sendMessage(message.from, MSG_INDISPONIVEL);
                 usuariosAguardandoRelatorio[numero]= 'imagem';
-                console.log(`Usuário ${numero} adicionado à lista de espera para relatórios.`);
             }
             break;
         }
         case '3':
-            await client.sendMessage(message.from, 'Certo, por favor descreva a sua demanda sem se esquecer do NB e caso necessário encaminhe prints para maior agilidade no atendimento.');
-            await registrarUso(numeroTelefoneLimpo, 'Suporte (Demanda Manual)');
-            if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
+            await client.sendMessage(message.from, 'Descreva sua demanda (com NB e prints se necessário).');
+            await registrarUso(numeroTelefoneLimpo, 'Suporte Manual');
             break;
         case '4':
             await enviarRemuneracao(client, message);
-          await registrarUso(numeroTelefoneLimpo, 'Iniciou Consulta Remuneração');
+            await registrarUso(numeroTelefoneLimpo, 'Remuneração');
             break;
         case '5':
-            await client.sendMessage(message.from, 'Por favor, envie o código do PDV que deseja consultar as tarefas! ENVIE APENAS OS NUMEROS');
+            await client.sendMessage(message.from, 'Envie o código do PDV (apenas números):');
             etapas[numero] = { etapa: 'pdv' };
             await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-          await registrarUso(numeroTelefoneLimpo, 'Iniciou Consulta PDV');
-            if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
+            await registrarUso(numeroTelefoneLimpo, 'Início PDV');
             break;
         case '6':
             await client.sendSeen(numero);
             await enviarListaContatos(client, message);
-            await registrarUso(numeroTelefoneLimpo, 'Lista de Contatos');
-            if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
+            await registrarUso(numeroTelefoneLimpo, 'Lista Contatos');
             break;
         case '7': {
-            await client.sendMessage(message.from, 'Por favor, envie o código do PDV que deseja consultar a *Coleta TTC*! (Apenas números)');
+            await client.sendMessage(message.from, 'Envie o código do PDV para Coleta TTC:');
             etapas[numero] = { etapa: 'coleta_ttc' };
             await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-          await registrarUso(numeroTelefoneLimpo, 'Iniciou Coleta TTC');
-            if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
+            await registrarUso(numeroTelefoneLimpo, 'Início TTC');
             break;
         }
         case '8': {
             await enviarCts(client, message, representante); 
-            await registrarUso(numeroTelefoneLimpo, 'Consulta de Bonificação CT por Setor');
+            await registrarUso(numeroTelefoneLimpo, 'Consulta CT');
             break;
         }
         case '9': {
-            await client.sendMessage(message.from, 'Por favor, envie o código do PDV que deseja consultar o *Giro de Equipamentos*! (Apenas números)');
-            etapas[numero] = { etapa: 'giro_equipamentos' }; // Apenas define a etapa
+            await client.sendMessage(message.from, 'Envie o código do PDV para Giro:');
+            etapas[numero] = { etapa: 'giro_equipamentos' }; 
             await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-          await registrarUso(numeroTelefoneLimpo, 'Iniciou Giro Equipamentos');
-            if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
+            await registrarUso(numeroTelefoneLimpo, 'Início Giro');
             break;
         }
         case 'menu':
             const hora = new Date().getHours();
-            const saudacaoBase = hora < 12 ? 'Bom dia' : (hora < 18 ? 'Boa tarde' : 'Boa noite');
-            const saudacoesAlternativas = [
-                'Tudo certo por aí?', 'Como vai você?', 'Tudo bem por aí?',
-                'Espero que esteja tudo em ordem.', 'Como posso ajudar?',
-                'Fico feliz em receber sua mensagem.', 'É um prazer falar com você.',
-                'Estou à disposição para ajudar.', 'O que mandas?', 'Que bom receber seu contato.'
-            ];
-            const saudacaoAleatoria = saudacoesAlternativas[Math.floor(Math.random() * saudacoesAlternativas.length)];
-
-            await client.sendMessage(
-                message.from,
-                `${saudacaoBase}! ${saudacaoAleatoria}\n${MENU_TEXT}`
-            );
+            const saudacao = hora < 12 ? 'Bom dia' : (hora < 18 ? 'Boa tarde' : 'Boa noite');
+            await client.sendMessage(message.from, `${saudacao}!\n${MENU_TEXT}`);
             await client.sendSeen(numero);
             if (etapas[numero]) {
                 delete etapas[numero].tentativasInvalidas;
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             }
-            await registrarUso(numeroTelefoneLimpo, 'Exibição do Menu');
+            await registrarUso(numeroTelefoneLimpo, 'Menu');
             break;
     }
 }
 
-// ============================================================================================
-// === LISTENER PRINCIPAL PARA MENSAGENS RECEBIDAS ===
-// ============================================================================================
 client.on('message', async message => {
-    // 🚨 CORREÇÃO CRÍTICA: Ignora atualizações de Status/Stories para evitar erro e crash
-    if (message.from === 'status@broadcast') {
-        return;
-    }
-
-    // Ignora mensagens de grupo
+    if (message.from === 'status@broadcast') return;
     if (message.from.endsWith('@g.us')) {
-        const isMention = message.mentionedIds && message.mentionedIds.includes(client.info.wid._serialized);
-        if (isMention) {
-             // console.log(`[GRUPO]: Fui mencionado no grupo ${message.from}`);
-        } else {
-             const chat = await message.getChat();
-             await chat.sendSeen();
-        }
+        const chat = await message.getChat();
+        await chat.sendSeen();
         return; 
     }
-
-    // Processa todas as outras mensagens (chats privados)
     await processUserMessage(message);
 });
 
-// Inicializa o cliente
 client.initialize();
 
-// Eventos adicionais
-client.on('disconnected', reason => {
-    console.error('⚠️ Cliente desconectado:', reason);
-    process.exit(1); // Força a reinicialização (se estiver usando PM2, ele vai reiniciar)
-});
-
-client.on('auth_failure', msg => {
-    console.error('❌ Falha na autenticação:', msg);
-    process.exit(1); // Força a reinicialização
-});
-
-client.on('change_state', state => {
-    console.log('🔄 Estado do cliente mudou para:', state);
-});
-
-client.on('loading_screen', (percent, message) => {
-    console.log(`⏳ Carregando... ${percent}% - ${message}`);
-});
+client.on('disconnected', reason => { console.error('⚠️ Desconectado:', reason); process.exit(1); });
+client.on('auth_failure', msg => { console.error('❌ Falha Auth:', msg); process.exit(1); });
+client.on('loading_screen', (pct, msg) => { console.log(`⏳ ${pct}% - ${msg}`); });

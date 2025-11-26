@@ -1,6 +1,8 @@
-// enviarCts.js
+// src/handlers/enviarCts.js (VERSÃO FINAL BLINDADA)
+
 const ExcelJS = require('exceljs');
 const path = require('path');
+const fs = require('fs'); // <--- Faltava isso
 
 // --- Funções Auxiliares ---
 
@@ -63,9 +65,18 @@ async function processNextExcelRequest() {
 
 // --- Módulo principal ---
 module.exports = async (client, message, representante) => {
+    
+    // 1. Validação Inicial
+    if (!representante || !representante.setor) {
+        console.log('[CT] Erro: Representante sem setor definido.');
+        await client.sendMessage(message.from, '❌ Não consegui identificar seu setor no cadastro.');
+        return;
+    }
+
     const setorUsuario = representante.setor;
     console.log(`🔍 Buscando CTs para o setor: ${setorUsuario}`);
 
+    // 2. Definição do Caminho do Arquivo
     const arquivo = path.join(
         '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\11 - NOVEMBRO\\',
         '_CT 2025 - Controle Bonificacao.xlsx'
@@ -73,21 +84,29 @@ module.exports = async (client, message, representante) => {
 
     await client.sendMessage(
         message.from,
-        `⏳ Buscando todos os contratos de bonificação para o seu setor (*${setorUsuario}*)...`
+        `⏳ Buscando contratos de bonificação para o setor *${setorUsuario}*...`
     );
 
-    return new Promise(async (resolve, reject) => {
+    return new Promise((resolve, reject) => {
         const requestHandler = async () => {
             try {
+                // 3. Verificação de Existência do Arquivo
+                if (!fs.existsSync(arquivo)) {
+                    console.error(`[CT] Arquivo não encontrado: ${arquivo}`);
+                    await client.sendMessage(message.from, '❌ O arquivo de Bonificação (CT) não foi encontrado na rede.');
+                    resolve();
+                    return;
+                }
+
                 const workbook = new ExcelJS.Workbook();
                 await workbook.xlsx.readFile(arquivo);
-                console.log('✅ Planilha de Bonificação (CT) carregada com sucesso.');
+                console.log('✅ Planilha de Bonificação (CT) carregada.');
 
                 const aba = workbook.getWorksheet('Base CT');
                 
                 if (!aba) {
-                    console.error('❌ A aba "Base CT" não foi encontrada na planilha.');
-                    await client.sendMessage(message.from, '❌ Não foi possível encontrar a aba "Base CT" na planilha. Avise o APR.');
+                    console.error('❌ Aba "Base CT" não encontrada.');
+                    await client.sendMessage(message.from, '❌ A aba de dados "Base CT" não existe na planilha.');
                     resolve();
                     return;
                 }
@@ -97,8 +116,9 @@ module.exports = async (client, message, representante) => {
                 aba.eachRow((row, rowNumber) => {
                     if (rowNumber === 1) return;
 
-                    const rnPlanilha = getCellValueAsString(row.getCell(2));
+                    const rnPlanilha = getCellValueAsString(row.getCell(2)); // Coluna B = Setor/RN
 
+                    // Comparação flexível (string e trim)
                     if (String(rnPlanilha).trim() === String(setorUsuario).trim()) {
                         const contratoInfo = {
                             codPdv: getCellValueAsString(row.getCell(3)),
@@ -115,11 +135,10 @@ module.exports = async (client, message, representante) => {
 
                 if (contratosEncontrados.length > 0) {
                     const detalhesContratos = contratosEncontrados.map(ct => {
-                        // <-- ALTERAÇÃO DA LÓGICA AQUI -->
                         const produtos = ct.BoniProdutos;
                         const pago = ct.BonifPago;
                         
-                        // A porcentagem agora é (PAGO / PRODUTOS)
+                        // Cálculo de Progresso: (Pago / Produtos) * 100
                         const percentualPago = produtos > 0 ? Math.round((pago / produtos) * 100) : 0;
                         const barraProgresso = gerarBarraProgresso(percentualPago);
 
@@ -127,26 +146,27 @@ module.exports = async (client, message, representante) => {
                             `🏪 *PDV:* ${ct.codPdv} - ${ct.Cliente}\n` +
                             `🔖 *Marca:* ${ct.Marca}\n` +
                             `💰 *Total Contrato:* ${formatarMoeda(ct.VrTotalContrato)}\n` +
-                            `📦 *Bonificação (Produtos):* ${formatarMoeda(produtos)}\n` +
-                            `💸 *Bonificação (Paga):* ${formatarMoeda(pago)}\n` +
+                            `📦 *Meta Produtos:* ${formatarMoeda(produtos)}\n` +
+                            `💸 *Pago:* ${formatarMoeda(pago)}\n` +
                             `📊 *Saldo:* ${formatarMoeda(ct.Saldos)}\n` +
                             `📈 *Progresso:* ${percentualPago}% ${barraProgresso}`
                         );
-                    }).join('\n\n');
+                    }).join('\n\n------------------------------\n\n');
 
-                    const resposta = `🎁 *Contratos de Bonificação (CT) para o Setor ${setorUsuario}*\n\n` +
-                                   `${detalhesContratos}`;
+                    const resposta = `🎁 *CONTRATOS DE BONIFICAÇÃO (CT)*\n` +
+                                     `📍 Setor: ${setorUsuario}\n\n` +
+                                     `${detalhesContratos}`;
 
                     await client.sendMessage(message.from, resposta);
 
                 } else {
-                    await client.sendMessage(message.from, `⚠️ Nenhum contrato de bonificação encontrado para o seu setor (*${setorUsuario}*).`);
+                    await client.sendMessage(message.from, `⚠️ Nenhum contrato de bonificação encontrado para o setor *${setorUsuario}*.`);
                 }
                 resolve();
 
             } catch (err) {
-                console.error('❌ Erro ao consultar a planilha de bonificação:', err);
-                await client.sendMessage(message.from, '❌ Ocorreu um erro ao processar sua solicitação. Avise o APR.');
+                console.error('❌ Erro ao processar planilha CT:', err);
+                await client.sendMessage(message.from, '❌ Erro ao ler a planilha de contratos.');
                 reject(err);
             }
         };

@@ -1,93 +1,132 @@
-// ALTERADO: Adicionado STAFFS_PATH
-const { lerJson, REPRESENTANTES_PATH, LOG_USO_PATH, STAFFS_PATH } = require('../utils/dataHandler.js'); 
-const MENU_ATIVO = require('../config/menuOptionsAtivo.js');
+// src/handlers/AtivacaoRepresentantes.js (VERSÃO FINAL - SUPORTE LID + PATH SEGURO)
+
+const fs = require('fs');
+const path = require('path');
+
+// --- CONFIGURAÇÃO DE CAMINHOS SEGUROS ---
+const REPRESENTANTES_PATH = path.join(process.cwd(), 'data', 'representantes.json');
+const LOG_USO_PATH = path.join(process.cwd(), 'data', 'log_uso.json');
+const STAFFS_PATH = path.join(process.cwd(), 'data', 'staffs.json');
+
+// Tenta carregar o menu de ativação. Se não achar, usa um texto padrão.
+let MENU_ATIVO = "Olá! Percebi que você não acessa o bot há alguns dias. Digite 'menu' para ver suas opções.";
+try {
+    const menuPath = path.join(process.cwd(), 'src', 'config', 'menuOptionsAtivo.js');
+    if (fs.existsSync(menuPath)) {
+        MENU_ATIVO = require(menuPath);
+    }
+} catch (e) {
+    console.error('Erro ao carregar menuOptionsAtivo:', e);
+}
+
+// Função auxiliar para ler JSON
+function lerJsonSeguro(caminho) {
+    try {
+        if (fs.existsSync(caminho)) {
+            return JSON.parse(fs.readFileSync(caminho, 'utf-8'));
+        }
+    } catch (e) {
+        console.error(`Erro ao ler JSON ${caminho}:`, e);
+    }
+    return [];
+}
 
 /**
- * Envia uma mensagem de ativação para todos os representantes que não interagiram com o bot nos últimos dias.
- * @param {import('whatsapp-web.js').Client} client O cliente do WhatsApp.
- * @returns {Promise<string>} Uma mensagem de resultado da operação.
+ * Envia uma mensagem de ativação para representantes inativos.
  */
 async function enviarMenuAtivacao(client) {
     console.log('[ATIVACAO]: Iniciando processo de ativação por inatividade...');
 
     try {
-        const representantes = lerJson(REPRESENTANTES_PATH, []);
-        const logUso = lerJson(LOG_USO_PATH, []);
-        // NOVO: Carrega a lista de staffs
-        const staffs = lerJson(STAFFS_PATH, []);
+        const representantes = lerJsonSeguro(REPRESENTANTES_PATH);
+        const logUso = lerJsonSeguro(LOG_USO_PATH);
+        const staffs = lerJsonSeguro(STAFFS_PATH);
 
         // =======================================================================
-        // === LÓGICA DE FILTRAGEM ATUALIZADA ====================================
+        // === LÓGICA DE FILTRAGEM ===
         // =======================================================================
 
-        // 1. Define a data limite (7 dias atrás, conforme seu código)
-        // NOTA: Seus logs mencionam 3 dias, mas o código usa 7. Ajustei para 7.
+        // 1. Define a data limite (7 dias atrás)
         const seteDiasAtras = new Date();
         seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
         seteDiasAtras.setHours(0, 0, 0, 0);
 
-        // 2. Cria um conjunto com os setores que tiveram atividade recente
+        // 2. Mapeia setores ativos recentemente
         const setoresAtivosRecentemente = new Set();
         for (const log of logUso) {
-            const dataLog = new Date(log.timestamp);
-            if (dataLog >= seteDiasAtras) {
-                setoresAtivosRecentemente.add(String(log.setor)); // Converte para String para garantir a comparação
+            if (log.timestamp) {
+                const dataLog = new Date(log.timestamp);
+                if (dataLog >= seteDiasAtras) {
+                    setoresAtivosRecentemente.add(String(log.setor));
+                }
             }
         }
         
         console.log(`[ATIVACAO]: ${setoresAtivosRecentemente.size} setores estiveram ativos nos últimos 7 dias.`);
 
-        // NOVO: Cria um conjunto com os telefones da staff para uma verificação rápida e eficiente
-        const staffPhones = new Set(staffs.map(staff => String(staff.telefone)));
+        // 3. Mapeia telefones da staff (para ignorar)
+        // Removemos caracteres não numéricos para garantir a comparação
+        const staffPhones = new Set(staffs.map(staff => String(staff.telefone).replace(/\D/g, '')));
 
-        // 3. Filtra os representantes que estão inativos E NÃO são staffs
+        // 4. Filtra os alvos
         const alvos = representantes.filter(rep => {
+            if (!rep.telefone) return false;
+
+            const telefoneLimpo = String(rep.telefone).replace(/\D/g, '');
+            
             // Condição 1: O setor do representante está inativo?
+            // (Se o setor não está na lista de ativos, então está inativo)
             const isInactive = !setoresAtivosRecentemente.has(String(rep.setor));
             
-            // Condição 2: O representante NÃO é um membro da staff?
-            const isNotStaff = !staffPhones.has(String(rep.telefone));
+            // Condição 2: O representante NÃO é staff?
+            const isNotStaff = !staffPhones.has(telefoneLimpo);
             
-            // Ambas as condições precisam ser verdadeiras para ele ser um alvo
             return isInactive && isNotStaff;
         });
 
         // =======================================================================
 
         if (alvos.length === 0) {
-            console.log('[ATIVACAO]: Nenhum representante inativo (que não seja staff) para ativar.');
-            return "Nenhum representante inativo para ativar. Todos interagiram nos últimos 7 dias ou são membros da staff!";
+            console.log('[ATIVACAO]: Nenhum representante inativo encontrado.');
+            return "Nenhum representante inativo para ativar. Todos interagiram recentemente ou são staff!";
         }
 
-        console.log(`[ATIVACAO]: ${alvos.length} representantes inativos (não-staffs) serão notificados.`);
+        console.log(`[ATIVACAO]: ${alvos.length} representantes inativos encontrados.`);
 
         let contadorEnvios = 0;
-        for (const rep of alvos) {
-            if (!rep.telefone) {
-                console.warn(`- Representante '${rep.nome || 'Sem Nome'}' (setor ${rep.setor}) sem número de telefone. Pulando.`);
-                continue;
-            }
 
-            const numero = `${rep.telefone}@c.us`;
+        for (const rep of alvos) {
+            // --- LÓGICA HÍBRIDA DE DESTINO (A Correção Principal) ---
+            // Se tiver LID salvo no JSON, usa o LID. Se não, usa o telefone@c.us
+            let idDestino;
+            
+            if (rep.lid) {
+                idDestino = rep.lid;
+            } else {
+                const telefoneLimpo = String(rep.telefone).replace(/\D/g, '');
+                idDestino = `${telefoneLimpo}@c.us`;
+            }
             
             try {
-                await client.sendMessage(numero, MENU_ATIVO);
-                console.log(`- Mensagem de ativação enviada para: ${rep.nome} (Setor: ${rep.setor}, Tel: ${numero})`);
+                console.log(`[ATIVACAO] Enviando para ${rep.nome || 'Sem Nome'} (Setor ${rep.setor}). ID: ${idDestino}`);
+                
+                await client.sendMessage(idDestino, MENU_ATIVO);
                 contadorEnvios++;
 
-                const delay = Math.floor(Math.random() * 5000) + 5000; // Delay entre 5 e 10 segundos
+                // Delay de segurança para evitar banimento (5 a 10 segundos)
+                const delay = Math.floor(Math.random() * 5000) + 5000; 
                 await new Promise(resolve => setTimeout(resolve, delay));
 
             } catch (error) {
-                console.error(`- Falha ao enviar para ${rep.nome} (${numero}):`, error.message);
+                console.error(`[ATIVACAO] Falha ao enviar para ${idDestino}:`, error.message);
             }
         }
         
-        return `Campanha de ativação concluída. ${contadorEnvios} de ${alvos.length} representantes inativos foram notificados.`;
+        return `Campanha concluída. Mensagens enviadas para ${contadorEnvios} de ${alvos.length} representantes.`;
 
     } catch (error) {
-        console.error('[ATIVACAO]: Erro crítico durante a campanha de ativação:', error);
-        return 'Ocorreu um erro grave ao executar a campanha. Verifique os logs do console.';
+        console.error('[ATIVACAO]: Erro crítico:', error);
+        return 'Ocorreu um erro grave ao executar a campanha.';
     }
 }
 
