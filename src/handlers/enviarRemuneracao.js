@@ -1,19 +1,16 @@
-// src/handlers/enviarRemuneracao.js (VERSÃO FINAL - BUSCA HÍBRIDA + PATH CORRIGIDO)
+// src/handlers/enviarRemuneracao.js (VERSÃO FINAL - CORRIGIDA)
 
 const fs = require('fs');
 const path = require('path');
 const { MessageMedia } = require('whatsapp-web.js');
 const { escreverJson, ETAPAS_PATH } = require('../utils/dataHandler.js');
 
-// 🚨 CORREÇÃO DE CAMINHOS: Força o uso da pasta 'data' na raiz para evitar erro de leitura
-// process.cwd() pega a pasta onde o bot foi iniciado (C:\botzapzap\botzapzap)
 const CAMINHO_REPRESENTANTES = path.join(process.cwd(), 'data', 'representantes.json');
 const CAMINHO_SENHAS = path.join(process.cwd(), 'data', 'senhaRemuneracao.json');
 
 let isSendingRemuneracao = false;
 const remuneracaoSendQueue = [];
 
-// Função auxiliar para ler JSON com segurança
 function lerJsonSeguro(caminho) {
     try {
         const data = fs.readFileSync(caminho, 'utf-8');
@@ -24,7 +21,6 @@ function lerJsonSeguro(caminho) {
     }
 }
 
-// ✅ FUNÇÃO PARA ENVIAR MÚLTIPLOS ARQUIVOS
 async function processNextRemuneracaoRequest() {
     if (remuneracaoSendQueue.length === 0) {
         isSendingRemuneracao = false;
@@ -39,7 +35,6 @@ async function processNextRemuneracaoRequest() {
     console.log(`[Remuneração Fila] Processando solicitação para ${numero} (Matrícula: ${matricula})`);
 
     try {
-        // --- EXTRAÇÃO MANUAL DE TELEFONE ---
         let telefoneLimpo;
         if (numero.includes('@')) {
             telefoneLimpo = numero.split('@')[0];
@@ -49,8 +44,6 @@ async function processNextRemuneracaoRequest() {
 
         const representantes = lerJsonSeguro(CAMINHO_REPRESENTANTES);
         
-        // --- 🚀 BUSCA HÍBRIDA (A CORREÇÃO PRINCIPAL) ---
-        // Procura pelo telefone OU pelo LID
         const representante = representantes.find(r => 
             String(r.telefone).trim() === String(telefoneLimpo).trim() || 
             (r.lid && r.lid === numero)
@@ -64,7 +57,6 @@ async function processNextRemuneracaoRequest() {
         
         const setor = representante.setor.toString();
         
-        // 1. Caminho para o DIRETÓRIO (pasta) do setor
         const diretorioPath = path.join(
             String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\12 - dezembro\_GERADOR PDF\REMUNERACAO`,
             setor
@@ -72,13 +64,11 @@ async function processNextRemuneracaoRequest() {
 
         console.log("📁 Tentando acessar a pasta em:", diretorioPath);
 
-        // 2. Verifica se a PASTA existe
         if (!fs.existsSync(diretorioPath)) {
             await client.sendMessage(numero, `❌ A pasta de remuneração para o setor ${setor} não foi encontrada.`);
             return; 
         }
 
-        // 3. Lê todos os arquivos da pasta
         const arquivos = fs.readdirSync(diretorioPath);
 
         if (arquivos.length === 0) {
@@ -88,11 +78,9 @@ async function processNextRemuneracaoRequest() {
 
         await client.sendMessage(numero, `🔄 Encontrei !!! 🏋️ Preparando para envio, aguarde ⏰...`);
 
-        // 4. Faz um loop e envia CADA arquivo encontrado
         for (const nomeArquivo of arquivos) {
             const caminhoCompletoArquivo = path.join(diretorioPath, nomeArquivo);
             
-            // Ignora arquivos temporários ou de sistema
             if (nomeArquivo.startsWith('~') || nomeArquivo.startsWith('.')|| nomeArquivo.toLowerCase() ==='thumbs.db') {
                 continue; 
             }
@@ -114,7 +102,6 @@ async function processNextRemuneracaoRequest() {
         console.error("❌ Erro inesperado ao processar remuneração na fila:", err);
         await client.sendMessage(numero, "❌ Ocorreu um erro ao enviar sua planilha de remuneração. Por favor, tente novamente mais tarde.");
     } finally {
-        // Chama o próximo da fila
         processNextRemuneracaoRequest();
     }
 }
@@ -124,7 +111,6 @@ async function enviarRemuneracao(client, message) {
     const texto = message.body.trim();
     const isOperatorRequest = message._operator_triggered === true;
 
-    // Função auxiliar local para ler etapas (já que mudamos imports)
     function lerEtapas() {
         try { return JSON.parse(fs.readFileSync(ETAPAS_PATH, 'utf-8')); } catch { return {}; }
     }
@@ -141,14 +127,12 @@ async function enviarRemuneracao(client, message) {
         return;
     }
 
-    // --- CAMINHO 1: REQUISIÇÃO DIRETA DO OPERADOR ---
     if (isOperatorRequest) {
         console.log(`[OPERADOR] Requisição de remuneração para ${numero}`);
         
         let telefoneLimpo = numero.includes('@') ? numero.split('@')[0] : numero;
         
         const representantes = lerJsonSeguro(CAMINHO_REPRESENTANTES);
-        // BUSCA HÍBRIDA AQUI TAMBÉM
         const representante = representantes.find(r => 
             String(r.telefone).trim() === String(telefoneLimpo).trim() || 
             (r.lid && r.lid === numero)
@@ -159,7 +143,6 @@ async function enviarRemuneracao(client, message) {
             return;
         }
 
-        // Adiciona à fila diretamente
         remuneracaoSendQueue.push({ client, message, matricula: 'BYPASS_OPERADOR' });
 
         if (!isSendingRemuneracao) {
@@ -170,7 +153,6 @@ async function enviarRemuneracao(client, message) {
         return; 
     }
 
-    // --- CAMINHO 2: USUÁRIO RESPONDENDO A MATRÍCULA ---
     if (etapaAtual === 'remuneracao') {
         const matricula = texto.replace(/\D/g, '');
 
@@ -184,7 +166,6 @@ async function enviarRemuneracao(client, message) {
         const representantes = lerJsonSeguro(CAMINHO_REPRESENTANTES);
         const senhaRemuneracao = lerJsonSeguro(CAMINHO_SENHAS);
         
-        // BUSCA HÍBRIDA
         const representante = representantes.find(r => 
             String(r.telefone).trim() === String(telefoneLimpo).trim() || 
             (r.lid && r.lid === numero)
@@ -196,8 +177,10 @@ async function enviarRemuneracao(client, message) {
             item => item.setor?.toString() === setor && item.senha?.toString() === matricula
         );
 
+        // --- CORREÇÃO AQUI ---
         if (!credencialValida) {
-            await client.sendMessage(numero, '❌ Matrícula incorreta para o seu setor.');
+            // Corrigido para usar crases e a variável 'matricula'
+            await client.sendMessage(numero, `❌ Você digitou "${matricula}". Matrícula incorreta para o seu setor.`);
             delete etapas[numero];
             escreverJson(ETAPAS_PATH, etapas);
             return;
@@ -217,7 +200,6 @@ async function enviarRemuneracao(client, message) {
         return; 
     }
 
-    // --- CAMINHO 3: USUÁRIO INICIANDO O FLUXO NORMALMENTE ---
     etapas[numero] = { etapa: 'remuneracao' };
     escreverJson(ETAPAS_PATH, etapas);
     await client.sendMessage(numero, 'Por favor, informe sua *matrícula* para continuar (apenas números).');
