@@ -10,9 +10,11 @@ const MENU_TEXT = `
 6️⃣ - Consultar a lista de telefones úteis Tarumã 📞🏢
 7️⃣ - Consultar Coleta TTC do PDV 📈🏪
 8️⃣ - Consultar Bonificação do setor (CT) 🎁
-9️⃣ - Consultar Giro de Equipamentos do PDV 🔄🏪 <<<< NOVA FUNÇÃO
+9️⃣ - Consultar Giro de Equipamentos do PDV 🔄🏪 
 
 Digite *MENU* a qualquer momento para receber novamente essa mensagem
+
+Atenção! O WhatsappWeb tem enfrentado lentidão. Mande a mensagem e aguarde a resposta, caso não recebe mande o "MENU".
 `;
 
 module.exports = MENU_TEXT;
