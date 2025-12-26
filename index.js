@@ -13,6 +13,9 @@ const { lerJson, registrarUso, ETAPAS_PATH, ATENDIDOS_PATH, STAFFS_PATH } = requ
 // 🚨 CAMINHO FORÇADO PARA O JSON (PASTA DATA)
 const CAMINHO_JSON_REAL = path.join(__dirname, 'data', 'representantes.json');
 
+// VOZ EXTRA
+const pedidoHandler = require('./src/handlers/pedidoHandler');
+
 // IMPORTANTE: Estes caminhos devem ser acessíveis (leitura) pelo servidor
 const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\12 - dezembro\\_GERADOR PDF\\ACOMPS\\410\\410_MKTPTT.pdf';
 const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\12 - dezembro\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_3.jpg'
@@ -65,6 +68,26 @@ client.on('ready', () => {
     cron.schedule('55 7 * * 1-5', () => { lembretePonto(client, '7:55'); }, { timezone: TIMEZONE });
     cron.schedule('0 12 * * 1-5', () => { lembretePonto(client, '12:00'); }, { timezone: TIMEZONE });
     cron.schedule('45 17 * * 1-5', () => { lembretePonto(client, '17:45'); }, { timezone: TIMEZONE });
+    
+    // === AGENDADOR DE JANELAS DE PEDIDOS ===
+    const JANELAS_CRON = [
+        { hora: '00 13', label: '13h00' },
+        { hora: '30 13', label: '13h30' },
+        { hora: '00 14', label: '14h00' },
+        { hora: '30 14', label: '14h30' },
+        { hora: '00 15', label: '15h00' },
+        { hora: '30 15', label: '15h30' },
+        { hora: '00 16', label: '16h00' },
+        { hora: '30 16', label: '16h30' }
+    ];
+
+    JANELAS_CRON.forEach(j => {
+        cron.schedule(`${j.hora} * * 1-5`, async () => {
+            console.log(`[JANELA] 🕒 Hora de processar pedidos das ${j.label}`);
+            await pedidoHandler.executarConversaoLote(client, j.label);
+        }, { timezone: "America/Sao_Paulo" });
+    });
+
     
     console.log('[AGENDADOR]: Agendamentos configurados.');
 
@@ -123,6 +146,16 @@ client.on('message_create', async (message) => {
         await client.sendMessage(message.to, '🤖 Iniciando ativação...');
         const res = await enviarMenuAtivacao(client);
         await client.sendMessage(message.to, `✅ ${res}`);
+        return;
+    }
+
+    // Comando para forçar o processamento manual de uma janela
+    if (body.toLowerCase().startsWith('/processar')) {
+        const janelaManual = body.split(' ')[1]; // Ex: 15h30
+        if (!janelaManual) return await client.sendMessage(message.to, "❌ Use: /processar 15h30");
+        
+        await client.sendMessage(message.to, `⚙️ Forçando processamento da janela ${janelaManual}...`);
+        await pedidoHandler.executarConversaoLote(client, janelaManual);
         return;
     }
 
@@ -302,6 +335,24 @@ async function processUserMessage(message) {
                 await enviarListaContatos(client, message);
                 return;
             }
+// NOVO: Modo Bloco de Notas (Acumula mensagens até a hora da janela)
+            if (etapaAtual === 'wait') {
+                const msgUpper = message.body.toUpperCase().trim();
+                
+                // Se o usuário quiser sair do modo pedido
+                if (msgUpper === 'MENU') {
+                    delete etapas[numero];
+                    fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+                    const hora = new Date().getHours();
+                    const saudacao = hora < 12 ? 'Bom dia' : (hora < 18 ? 'Boa tarde' : 'Boa noite');
+                    await client.sendMessage(message.from, `${saudacao}! Saindo do modo pedido.\n${MENU_TEXT}`);
+                    return;
+                }
+
+                console.log(`[DEBUG] Anotando dados brutos para ${numeroTelefoneLimpo}`);
+                await pedidoHandler.armazenarTextoBruto(client, message, etapas[numero].proximaAnalise);
+                return; 
+            }
         } catch (error) {
             console.error(`Erro etapa "${etapaAtual}" para ${numero}:`, error);
             await client.sendMessage(numero, '❌ Erro ao processar. Tente novamente.');
@@ -383,6 +434,26 @@ async function processUserMessage(message) {
             await registrarUso(numeroTelefoneLimpo, 'Início Giro');
             break;
         }
+
+    fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+    await registrarUso(numeroTelefoneLimpo, 'Início Pedido');
+    break;
+            case '10': {
+            console.log(`[DEBUG] Iniciando comando 10 para ${numeroTelefoneLimpo}`);
+            // Inicia o arquivo JSON e calcula a janela
+            const resultado = await pedidoHandler.iniciarProcessamentoPedido(client, message);
+            
+            // Seta o estado para 'wait' no seu arquivo de etapas
+            etapas[numero] = { 
+                etapa: 'wait', 
+                proximaAnalise: resultado.proximaJanela 
+            };
+            
+            fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+            await registrarUso(numeroTelefoneLimpo, 'Início Pedido');
+            break;
+        }
+    break
         case 'menu':
             const hora = new Date().getHours();
             const saudacao = hora < 12 ? 'Bom dia' : (hora < 18 ? 'Boa tarde' : 'Boa noite');
