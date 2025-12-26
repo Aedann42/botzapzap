@@ -114,7 +114,7 @@ async function enviarMenuAtivacao(client) {
                 contadorEnvios++;
 
                 // Delay de segurança para evitar banimento (5 a 10 segundos)
-                const delay = Math.floor(Math.random() * 5000) + 5000; 
+                const delay = Math.floor(Math.random() * 1) + 1; 
                 await new Promise(resolve => setTimeout(resolve, delay));
 
             } catch (error) {
