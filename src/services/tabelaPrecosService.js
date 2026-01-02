@@ -1,7 +1,7 @@
 const ExcelJS = require('exceljs');
 const fs = require('fs');
 
-const CAMINHO_TABELA = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\12 - DEZEMBRO\\_GERADOR PDF\\TABELA DE PREÇOS - 2025.xlsx';
+const CAMINHO_TABELA = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\ 1 - janeiro\\_GERADOR PDF\\TABELA DE PREÇOS - 2025.xlsx';
 
 module.exports = {
     buscarDadosTabela: async () => {

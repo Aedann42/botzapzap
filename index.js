@@ -17,8 +17,8 @@ const CAMINHO_JSON_REAL = path.join(__dirname, 'data', 'representantes.json');
 const pedidoHandler = require('./src/handlers/pedidoHandler');
 
 // IMPORTANTE: Estes caminhos devem ser acessíveis (leitura) pelo servidor
-const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\12 - dezembro\\_GERADOR PDF\\ACOMPS\\410\\410_MKTPTT.pdf';
-const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2025\\12 - dezembro\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_3.jpg'
+const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\ 1 - janeiro\\_GERADOR PDF\\ACOMPS\\410\\410_MKTPTT.pdf';
+const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\ 1 - janeiro\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_3.jpg'
 
 const MENU_TEXT = require('./src/config/menuOptions');
 
