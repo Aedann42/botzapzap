@@ -6,7 +6,7 @@ async function enviarRelatoriosImagem(client, message, representante) {
     const numero = message.from;
 
     // 🚨 CONFIRA SE ESTE CAMINHO ESTÁ CERTO NO SEU SERVIDOR
-    const BASE_PATH = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2025\12 - dezembro\_GERADOR PDF\IMAGENS`;
+    const BASE_PATH = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2026\1 - Janeiro\_GERADOR PDF\IMAGENS`;
 
     try {
         // CORREÇÃO: Mudamos de .rota para .setor
