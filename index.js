@@ -7,6 +7,10 @@ const cron = require('node-cron');
 const transcricaoService = require('./src/services/transcricaoService');
 const { lerJson, registrarUso, ETAPAS_PATH, ATENDIDOS_PATH, STAFFS_PATH } = require('./src/utils/dataHandler.js');
 
+// Adicione junto com os outros requires no topo
+const verificarArquivoAtualizado = require('./src/services/checkDateReports');
+
+
 // 🚨 CAMINHO FORÇADO PARA O JSON (PASTA DATA)
 const CAMINHO_JSON_REAL = path.join(__dirname, 'data', 'representantes.json');
 
