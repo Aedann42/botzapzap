@@ -13,8 +13,11 @@ representantes.json
 senhaRemuneracao.json
 /logs
 stafs.json
+/pedidos
+.env
+.session
+data/tabelaPrecos.txt
 
 # Pasta de sessão do WhatsApp
 /.session
 
-/pedidos

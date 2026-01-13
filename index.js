@@ -4,14 +4,13 @@ const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
 const cron = require('node-cron');
-
-const verificarArquivoAtualizado = require('./src/services/checkDateReports.js');
+const transcricaoService = require('./src/services/transcricaoService');
 const { lerJson, registrarUso, ETAPAS_PATH, ATENDIDOS_PATH, STAFFS_PATH } = require('./src/utils/dataHandler.js');
 
 // 🚨 CAMINHO FORÇADO PARA O JSON (PASTA DATA)
 const CAMINHO_JSON_REAL = path.join(__dirname, 'data', 'representantes.json');
 
-// VOZ EXTRA
+// VOZ EXTRA & HANDLER DE PEDIDOS
 const pedidoHandler = require('./src/handlers/pedidoHandler');
 
 // IMPORTANTE: Estes caminhos devem ser acessíveis (leitura) pelo servidor
@@ -37,7 +36,7 @@ let atendidos = lerJson(ATENDIDOS_PATH, []);
 const staffs = lerJson(STAFFS_PATH, []);
 const usuariosAguardandoRelatorio = {};
 
-// 1. INICIALIZAÇÃO DO CLIENTE (Obrigatório vir antes dos listeners)
+// 1. INICIALIZAÇÃO DO CLIENTE
 const client = new Client({
     authStrategy: new LocalAuth({ dataPath: '.session' }),
     webCacheType: 'remote', 
@@ -52,7 +51,6 @@ client.on('qr', qr => qrcode.generate(qr, { small: true }));
 client.on('ready', () => {
     console.log('✅ Bot conectado!');
     
-    // Verifica se o arquivo existe no caminho forçado
     if (fs.existsSync(CAMINHO_JSON_REAL)) {
         console.log(`📂 JSON de Representantes carregado de: ${CAMINHO_JSON_REAL}`);
     } else {
@@ -79,13 +77,18 @@ client.on('ready', () => {
         { hora: '30 16', label: '16h30' }
     ];
 
-    JANELAS_CRON.forEach(j => {
-        cron.schedule(`${j.hora} * * 1-5`, async () => {
-            console.log(`[JANELA] 🕒 Hora de processar pedidos das ${j.label}`);
-            await pedidoHandler.executarConversaoLote(client, j.label);
-        }, { timezone: "America/Sao_Paulo" });
-    });
+JANELAS_CRON.forEach(j => {
+    cron.schedule(`${j.hora} * * 1-5`, async () => {
+        console.log(`[JANELA] 🕒 Iniciando ciclo da janela ${j.label}`);
+        
+        // 1. PRIMEIRO: Transforma todos os áudios pendentes em texto
+        await transcricaoService.processarAudiosPendentes();
 
+        // 2. SEGUNDO: Processa o texto (que agora já contém os números) para itens
+        await pedidoHandler.executarConversaoLote(client, j.label);
+        
+    }, { timezone: "America/Sao_Paulo" });
+});
     
     console.log('[AGENDADOR]: Agendamentos configurados.');
 
@@ -100,10 +103,7 @@ client.on('ready', () => {
             const pdfPronto = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
             const imagemPronta = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
 
-            if (!pdfPronto && !imagemPronta) {
-                console.log('[VERIFICADOR]: Nada ainda.');
-                return;
-            }
+            if (!pdfPronto && !imagemPronta) return;
 
             const notificados = [];
             for (const userNumero in usuariosAguardandoRelatorio) {
@@ -130,10 +130,9 @@ client.on('ready', () => {
 });
 
 // ============================================================================================
-// === LISTENER DO OPERADOR (COMPARADOR FLEXÍVEL) ===
+// === LISTENER DO OPERADOR ===
 // ============================================================================================
 client.on('message_create', async (message) => {
-    // 🚨 SEGURANÇA: Ignora status
     if (message.from === 'status@broadcast') return;
     if (!message.fromMe) return;
 
@@ -147,12 +146,19 @@ client.on('message_create', async (message) => {
         return;
     }
 
-    // Comando para forçar o processamento manual de uma janela
+// Comando para forçar o processamento manual de uma janela
     if (body.toLowerCase().startsWith('/processar')) {
         const janelaManual = body.split(' ')[1]; // Ex: 15h30
         if (!janelaManual) return await client.sendMessage(message.to, "❌ Use: /processar 15h30");
         
         await client.sendMessage(message.to, `⚙️ Forçando processamento da janela ${janelaManual}...`);
+        
+        // --- ADICIONE ESTA LINHA AQUI 👇 ---
+        console.log('[MANUAL] 🎧 Iniciando transcrição forçada...');
+        const transcricaoService = require('./src/services/transcricaoService'); // Garanta que está importado
+        await transcricaoService.processarAudiosPendentes();
+        // -----------------------------------
+
         await pedidoHandler.executarConversaoLote(client, janelaManual);
         return;
     }
@@ -170,7 +176,6 @@ client.on('message_create', async (message) => {
         let targetUser = message.to; 
         let commandForUser = args;   
 
-        // Tenta extrair um número explicito no comando
         const primeiroEspaco = args.indexOf(' ');
         let possivelNumero = '';
         let restoDoComando = '';
@@ -182,45 +187,31 @@ client.on('message_create', async (message) => {
             possivelNumero = args.replace(/\D/g, ''); 
         }
 
-        // === AUTO-SAVE: FORÇA BRUTA ===
+        // AUTO-SAVE: FORÇA BRUTA
         if (possivelNumero.length >= 10) {
             console.log(`[OPERADOR]: Comando manual para telefone: ${possivelNumero}`);
             
-            // Se o chat atual for LID
             if (targetUser.includes('@lid')) {
-                console.log(`[AUTO-LEARN]: Tentando vincular LID ${targetUser} ao telefone ${possivelNumero}...`);
-                
                 try {
                     const rawData = fs.readFileSync(CAMINHO_JSON_REAL, 'utf-8');
                     const representantes = JSON.parse(rawData);
 
-                    // COMPARADOR FLEXÍVEL (Converte tudo para string e tira espaços)
                     const index = representantes.findIndex(r => 
                         String(r.telefone).trim() === String(possivelNumero).trim()
                     );
 
                     if (index !== -1) {
-                        // Só salva se for diferente
                         if (representantes[index].lid !== targetUser) {
                             representantes[index].lid = targetUser;
                             fs.writeFileSync(CAMINHO_JSON_REAL, JSON.stringify(representantes, null, 4));
-                            console.log(`✅ [AUTO-LEARN]: SUCESSO! JSON Atualizado.`);
                             await client.sendMessage(message.to, `🤖 [SISTEMA] Vínculo salvo!`);
-                        } else {
-                            console.log(`ℹ️ [AUTO-LEARN]: Este LID já estava salvo corretamente.`);
                         }
-                    } else {
-                        console.log(`❌ [AUTO-LEARN]: Telefone ${possivelNumero} não encontrado no JSON.`);
-                        
-                        // LOG DE DIAGNÓSTICO
-                        console.log("   -> Exemplo de telefone no JSON:", representantes[0]?.telefone);
-                    }
+                    } 
                 } catch (err) {
                     console.error(`❌ [AUTO-LEARN]: Erro ao gravar:`, err);
                 }
             }
 
-            // Redireciona o fluxo para o número limpo
             targetUser = possivelNumero + '@c.us'; 
             commandForUser = restoDoComando;       
         }
@@ -239,14 +230,13 @@ client.on('message_create', async (message) => {
 
 
 // ============================================================================================
-// === PROCESSADOR DE MENSAGENS (BLINDADO - LÊ DO PATH CORRETO) ===
+// === PROCESSADOR DE MENSAGENS ===
 // ============================================================================================
 async function processUserMessage(message) {
     if (message.from === 'status@broadcast') return;
 
     const numero = message.from; 
 
-    // Extração manual de segurança
     let numeroTelefoneLimpo;
     if (numero.includes('@')) {
         numeroTelefoneLimpo = numero.split('@')[0];
@@ -256,7 +246,7 @@ async function processUserMessage(message) {
 
     if (!numeroTelefoneLimpo) return; 
 
-    // Lê o JSON atualizado DIRETAMENTE DA FONTE
+    // Lê o JSON atualizado
     let representantes = [];
     try {
         const rawData = fs.readFileSync(CAMINHO_JSON_REAL, 'utf-8');
@@ -265,7 +255,6 @@ async function processUserMessage(message) {
         console.error('Erro ao ler representantes:', e);
     }
     
-    // BUSCA HÍBRIDA: Telefone OU LID
     const representante = representantes.find(rep => 
         String(rep.telefone).trim() === String(numeroTelefoneLimpo).trim() || 
         (rep.lid && rep.lid === numero)
@@ -276,7 +265,6 @@ async function processUserMessage(message) {
         return;
     }
 
-    // ===============================================================================
     // Verifica Atendidos / Staff
     const idPermanente = message.from; 
 
@@ -295,11 +283,11 @@ async function processUserMessage(message) {
         fs.writeFileSync(ATENDIDOS_PATH, JSON.stringify(atendidos, null, 2));
         return;
     }
-    // ===============================================================================
 
     const opcao = message.body.trim();
     let etapas = lerJson(ETAPAS_PATH, {});
 
+    // --- VERIFICAÇÃO DE ETAPAS ATIVAS ---
     if (etapas[numero] && etapas[numero].etapa) {
         const etapaAtual = etapas[numero].etapa;
 
@@ -333,24 +321,20 @@ async function processUserMessage(message) {
                 await enviarListaContatos(client, message);
                 return;
             }
-// NOVO: Modo Bloco de Notas (Acumula mensagens até a hora da janela)
+            
+            // 🚨 NOVO: MODO PEDIDO (ÁUDIO/TEXTO/EDITAR) 🚨
             if (etapaAtual === 'wait') {
-                const msgUpper = message.body.toUpperCase().trim();
+                // Passa a responsabilidade para o handler. Ele decide se continua ou finaliza.
+                const resultado = await pedidoHandler.processarMensagem(client, message);
                 
-                // Se o usuário quiser sair do modo pedido
-                if (msgUpper === 'MENU') {
+                // Se o usuário digitou "MENU" lá dentro, o handler retorna 'FINALIZAR'
+                if (resultado === 'FINALIZAR') {
                     delete etapas[numero];
                     fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-                    const hora = new Date().getHours();
-                    const saudacao = hora < 12 ? 'Bom dia' : (hora < 18 ? 'Boa tarde' : 'Boa noite');
-                    await client.sendMessage(message.from, `${saudacao}! Saindo do modo pedido.\n${MENU_TEXT}`);
-                    return;
                 }
-
-                console.log(`[DEBUG] Anotando dados brutos para ${numeroTelefoneLimpo}`);
-                await pedidoHandler.armazenarTextoBruto(client, message, etapas[numero].proximaAnalise);
-                return; 
+                return; // Impede que o bot processe o "MENU" novamente no switch abaixo
             }
+
         } catch (error) {
             console.error(`Erro etapa "${etapaAtual}" para ${numero}:`, error);
             await client.sendMessage(numero, '❌ Erro ao processar. Tente novamente.');
@@ -362,6 +346,7 @@ async function processUserMessage(message) {
 
     const MSG_INDISPONIVEL = '⚠️ Relatórios ainda não gerados. Avisarei quando estiverem prontos! 🤖';
 
+    // --- MENU PRINCIPAL ---
     switch (opcao.toLowerCase()) {
         case '1': { 
             await client.sendSeen(numero);
@@ -432,26 +417,21 @@ async function processUserMessage(message) {
             await registrarUso(numeroTelefoneLimpo, 'Início Giro');
             break;
         }
-
-    fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-    await registrarUso(numeroTelefoneLimpo, 'Início Pedido');
-    break;
+        
             case '10': {
-            console.log(`[DEBUG] Iniciando comando 10 para ${numeroTelefoneLimpo}`);
-            // Inicia o arquivo JSON e calcula a janela
-            const resultado = await pedidoHandler.iniciarProcessamentoPedido(client, message);
+            console.log(`[DEBUG] Iniciando MODO PEDIDO para ${numeroTelefoneLimpo}`);
             
-            // Seta o estado para 'wait' no seu arquivo de etapas
-            etapas[numero] = { 
-                etapa: 'wait', 
-                proximaAnalise: resultado.proximaJanela 
-            };
+            // Apenas manda o texto inicial
+            await pedidoHandler.iniciarProcessamentoPedido(client, message);
+            
+            // Seta estado wait
+            etapas[numero] = { etapa: 'wait' }; 
             
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             await registrarUso(numeroTelefoneLimpo, 'Início Pedido');
             break;
         }
-    break
+
         case 'menu':
             const hora = new Date().getHours();
             const saudacao = hora < 12 ? 'Bom dia' : (hora < 18 ? 'Boa tarde' : 'Boa noite');

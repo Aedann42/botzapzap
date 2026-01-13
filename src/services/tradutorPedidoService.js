@@ -1,43 +1,73 @@
 /**
- * Service responsável por transformar texto bruto em itens estruturados
- * baseados na tabela de preços.
+ * Pega o texto CSV (NB/PAGAMENTO/COD/QTD/VALOR) e vira Objeto JSON
  */
-module.exports = {
-    traduzirTextoParaItens: (textoBruto, produtosTabela) => {
-        console.log(`[TRADUTOR] 🧠 Iniciando tradução de dados brutos...`);
-        
-        const itensEncontrados = [];
-        let contador = 0;
+function traduzirTextoParaItens(textoProcessado) {
+    console.log("[TRADUTOR] 🔍 Iniciando tradução de texto bruto...");
+    
+    const linhas = textoProcessado.split('\n');
+    const itensEncontrados = [];
+    
+    // Variáveis "Sticky": Se o NB ou Pagamento aparecerem na linha 1, 
+    // valem para as próximas linhas caso elas venham vazias.
+    let nbEncontrado = "0";
+    let pagamentoEncontrado = "BOLETO";
 
-        // Regex para capturar: [Quantidade] [Nome do Produto]
-        // Suporta formatos como "10 skol", "5 brama" em múltiplas linhas ou na mesma linha
-        const regex = /(\d+)\s+([a-zA-Záàâãéèêíïóôõöúç\s]+?)(?=\s+\d+\s+|$|\n)/gi;
-        let match;
+    let indexItem = 1;
 
-        while ((match = regex.exec(textoBruto)) !== null && contador < 99) {
-            const qtd = match[1];
-            const termoBusca = match[2].toUpperCase().trim();
+    linhas.forEach((linha, idx) => {
+        linha = linha.trim();
+        if (!linha) return;
 
-            // Busca o melhor match na tabela de preços (Busca por inclusão)
-            const produto = produtosTabela.find(p => 
-                p.produto.toUpperCase().includes(termoBusca)
-            );
+        // DEBUG da linha
+        // console.log(`[TRADUTOR] Processando linha ${idx}: ${linha}`);
 
-            if (produto) {
-                contador++;
-                itensEncontrados.push({
-                    index: contador,
-                    codigo: produto.codigo,
-                    quantidade: qtd,
-                    valor: produto.valor,
-                    nomeOriginal: produto.produto
-                });
-                console.log(`[TRADUTOR] ✨ Match: "${termoBusca}" -> ${produto.produto}`);
+        // Formato esperado: NB/PAGAMENTO/COD/QTD/VALOR
+        const partes = linha.split('/');
+
+        if (partes.length >= 3) { // Precisa ter pelo menos até o código
+            
+            // 1. NB
+            const rawNB = partes[0].replace(/\D/g, ''); 
+            if (rawNB && rawNB !== "0") nbEncontrado = rawNB;
+
+            // 2. Pagamento (Novo campo)
+            const rawPag = partes[1] ? partes[1].trim().toUpperCase() : "";
+            if (rawPag && rawPag.length > 2) pagamentoEncontrado = rawPag;
+
+            // 3. Código
+            const codigo = partes[2].trim();
+            
+            // 4. Quantidade
+            const qtde = partes[3] ? partes[3].trim() : "1";
+            
+            // 5. Valor
+            const valor = partes[4] ? partes[4].trim() : "0";
+
+            // Validação básica do código
+            if (codigo && codigo !== "0000" && codigo.length > 1) {
+                const itemObj = {
+                    index: indexItem,
+                    nb: nbEncontrado,
+                    pagamento: pagamentoEncontrado,
+                    codigo: codigo,
+                    quantidade: qtde,
+                    valor: valor,
+                    nomeOriginal: `Item cód ${codigo}`
+                };
+                
+                itensEncontrados.push(itemObj);
+                indexItem++;
             } else {
-                console.warn(`[TRADUTOR] ⚠️ Não encontrado: "${termoBusca}"`);
+                console.log(`[TRADUTOR] ⚠️ Ignorando linha por código inválido: ${linha}`);
             }
+        } else {
+             // Logs para linhas que não são CSV (ex: mensagens de erro ou texto solto)
+             if(linha.length > 5) console.log(`[TRADUTOR] ℹ️ Linha fora do formato CSV ignorada: "${linha}"`);
         }
+    });
 
-        return itensEncontrados;
-    }
-};
+    console.log(`[TRADUTOR] ✅ Total de itens extraídos: ${itensEncontrados.length}`);
+    return itensEncontrados;
+}
+
+module.exports = { traduzirTextoParaItens };
