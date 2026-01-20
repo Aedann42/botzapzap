@@ -127,7 +127,7 @@ async function enviarListaContatos(client, message) {
                     `🔗 *Clique para conversar:* ${linkDireto}`;
 
         await client.sendMessage(numero, msg);
-        await client.sendSeen(numero);
+        //await client.sendSeen(numero);
         
         delete etapas[numero];
         salvarEtapas(etapas);

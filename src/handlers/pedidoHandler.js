@@ -29,10 +29,10 @@ module.exports = {
     iniciarProcessamentoPedido: async (client, message) => {
         await client.sendMessage(message.from, 
             `📝 *PEDIDO INTELIGENTE* \n\n` +
-            `1. Fale o NB e os itens.\n` +
+            `1. Fale ou digite o NB, a forma de pagamento (ex: Boleto 1), os itens e as quantidades.\n` +
             `2. O robô vai olhar a tabela e montar o pedido.\n\n` +
-            `Ex: "NB 50, 10 caixas de Skol Litrão"\n` +
-            `Digite *FIM* para enviar.`
+            `Ex: "NB 50, 10 caixas de Skol Litrão a 48 reais cada, boleto 10"\n` +
+            `Digite *FIM* para enviar. É possível mandar varias linhas ou audios`
         );
         return true; 
     },
@@ -161,7 +161,7 @@ module.exports = {
 
                 const tel = json.telefone + "@c.us";
                 if (itens.length > 0) {
-                    const resumo = itens.map(it => `📦 ${it.quantidade}x Cód ${it.codigo}`).join('\n');
+                    const resumo = itens.map(it => `📦 Produto Código ${it.codigo} x ${it.quantidade} no valor de R$ ${it.valor} `).join('\n');
                     await client.sendMessage(tel, `✅ *PEDIDO PROCESSADO (${janelaAlvo})*\n\n${resumo}`);
                 } else {
                     await client.sendMessage(tel, `⚠️ Janela ${janelaAlvo}: Não identifiquei itens na tabela. Verifique se o nome está correto.`);

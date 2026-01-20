@@ -95,7 +95,7 @@ async function processNextRemuneracaoRequest() {
         }
 
         await client.sendMessage(numero, '✅ Todos os seus arquivos foram enviados com sucesso!');
-        await client.sendSeen(numero);
+        //await client.sendSeen(numero);
         console.log(`[Remuneração Fila] Arquivos enviados com sucesso para ${numero}.`);
 
     } catch (err) {

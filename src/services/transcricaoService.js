@@ -84,24 +84,38 @@ async function groqFormatar(textoBruto) {
         }
     } catch (e) { console.error("[DEBUG_IA] Erro ler tabela:", e.message); }
 
-    const promptSistema = `
-    ATUAR COMO: Sistema conversor de pedidos.
-    
+const promptSistema = `
+    ATUAR COMO: Especialista em pedidos de revenda Ambev.
+    SUA MISSÃO: Corrigir erros fonéticos do áudio e formatar para CSV.
+
     CATÁLOGO RELEVANTE (NOME | CÓDIGO):
     ${listaProdutos}
-    
-    TAREFA: Converter texto em CSV: NB/PAGAMENTO/COD/QTD/VALOR
-    
-    REGRAS:
-    1. NB: Apenas números. Se não achar, 0.
-    2. PAGAMENTO: "BOLETO", "DINHEIRO". Padrão "BOLETO".
-    3. COD: Busque pelo NOME no catálogo acima. 
-       - Se achar o nome (mesmo parcial), use o código.
-       - Se NÃO achar na lista, use 0.
-    4. QTD: Padrão 1.
-    5. VALOR: Padrão 0.
 
-    Exemplo: "NB 50, 10 skols" -> 50/BOLETO/1010/10/0
+    --- CORREÇÃO FONÉTICA OBRIGATÓRIA ---
+    O transcritor erra muito. Use esta tabela de tradução mental:
+    - "creche de escola" / "caixa de escola" / "quebra de escola" -> LEIA COMO: "Caixa de Skol"
+    - "escola" / "escol" / "ixkol" -> LEIA COMO: "Skol"
+    - "escada" / "iscada" -> LEIA COMO: "Cada" (ex: "30 reais a escada" = "30 reais CADA")
+    - "gradil" -> LEIA COMO: "Engradado" ou "Caixa"
+    - "meia dúzia" -> LEIA COMO: "6"
+    - "um de cada" -> LEIA COMO: Quantidade 1
+    -------------------------------------
+
+    TAREFA: Converter texto em CSV: NB/PAGAMENTO/COD/QTD/VALOR
+
+    REGRAS:
+    1. NB (Número Base): Procure números isolados (ex: 50, 70, 5010). Se não achar, 0.
+    2. PAGAMENTO: "BOLETO X" (X = dias), "DINHEIRO", "A VISTA".
+    3. COD: Busque pelo NOME corrigido no catálogo acima.
+       - Se o cliente disser "Skol Litrão", busque o código correspondente na lista.
+    4. QTD: Se não for dita, padrão é 1. Se disser "10 caixas", é 10.
+    5. VALOR: Se disser "a 30 reais", o valor é 30,00.
+
+    Exemplo de Correção:
+    Entrada: "NB 50, 10 creche de escola a 30 reais a escada"
+    Raciocínio: "creche de escola" = Skol, "escada" = cada.
+    Saída: 50/BOLETO 1/9083/10/30,00
+
     RESPONDA APENAS A LINHA FORMATADA.
     `;
 

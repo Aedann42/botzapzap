@@ -353,7 +353,7 @@ async function processUserMessage(message) {
     // --- MENU PRINCIPAL ---
     switch (opcao.toLowerCase()) {
         case '1': { 
-            await client.sendSeen(numero);
+            //await client.sendSeen(numero);
             const pronto = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
             if (pronto) {
                 await enviarRelatoriosPdf(client, message, representante);
@@ -367,7 +367,7 @@ async function processUserMessage(message) {
             break;
         }
         case '2': {
-            await client.sendSeen(numero);
+            //await client.sendSeen(numero);
             const pronto = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
             if (pronto) {
                 await enviarRelatoriosImagem(client, message, representante);
@@ -391,19 +391,19 @@ async function processUserMessage(message) {
         case '5':
             await client.sendMessage(message.from, 'Envie o código do PDV (apenas números):');
             etapas[numero] = { etapa: 'pdv' };
-            await client.sendSeen(numero);
+            //await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             await registrarUso(numeroTelefoneLimpo, 'Início PDV');
             break;
         case '6':
-            await client.sendSeen(numero);
+            //await client.sendSeen(numero);
             await enviarListaContatos(client, message);
             await registrarUso(numeroTelefoneLimpo, 'Lista Contatos');
             break;
         case '7': {
             await client.sendMessage(message.from, 'Envie o código do PDV para Coleta TTC:');
             etapas[numero] = { etapa: 'coleta_ttc' };
-            await client.sendSeen(numero);
+            //await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             await registrarUso(numeroTelefoneLimpo, 'Início TTC');
             break;
@@ -416,7 +416,7 @@ async function processUserMessage(message) {
         case '9': {
             await client.sendMessage(message.from, 'Envie o código do PDV para Giro:');
             etapas[numero] = { etapa: 'giro_equipamentos' }; 
-            await client.sendSeen(numero);
+            //await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             await registrarUso(numeroTelefoneLimpo, 'Início Giro');
             break;
@@ -440,7 +440,7 @@ async function processUserMessage(message) {
             const hora = new Date().getHours();
             const saudacao = hora < 12 ? 'Bom dia' : (hora < 18 ? 'Boa tarde' : 'Boa noite');
             await client.sendMessage(message.from, `${saudacao}!\n${MENU_TEXT}`);
-            await client.sendSeen(numero);
+            //await client.sendSeen(numero);
             if (etapas[numero]) {
                 delete etapas[numero].tentativasInvalidas;
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));

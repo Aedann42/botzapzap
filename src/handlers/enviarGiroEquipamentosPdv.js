@@ -1,5 +1,4 @@
-// src/handlers/enviarGiroEquipamentosPdv.js (VERSÃO FINAL BLINDADA)
-
+// src/handlers/enviarGiroEquipamentosPdv.js
 const ExcelJS = require('exceljs');
 const path = require('path');
 const fs = require('fs');
@@ -32,7 +31,6 @@ function formatarData(valorCelula) {
     if (typeof valorCelula === 'number') {
         const excelEpoch = new Date(1899, 11, 30);
         const dataCalculada = new Date(excelEpoch.getTime() + valorCelula * 86400000);
-        // Ajuste de fuso
         const dataCorrigida = new Date(dataCalculada.getTime() + (dataCalculada.getTimezoneOffset() * 60000));
         return dataCorrigida.toLocaleDateString('pt-BR');
     }
@@ -51,7 +49,7 @@ function getCellValueAsString(cell) {
 
 function gerarBarraProgresso(percentual) {
     const totalBlocos = 10;
-    const blocosPreenchidos = Math.round((percentual / 100) * totalBlocos);
+    const blocosPreenchidos = Math.min(10, Math.max(0, Math.round((percentual / 100) * totalBlocos)));
     return '▰'.repeat(blocosPreenchidos) + '▱'.repeat(Math.max(0, totalBlocos - blocosPreenchidos));
 }
 
@@ -59,48 +57,31 @@ function lerJsonSeguro(caminho) {
     try {
         return JSON.parse(fs.readFileSync(caminho, 'utf-8'));
     } catch (e) {
-        console.error(`Erro ao ler JSON ${caminho}:`, e);
+        console.error(`[LOG] Erro ao ler JSON ${caminho}:`, e);
         return [];
     }
 }
 
-/**
- * Busca o setor do usuário usando a lógica Híbrida (Telefone ou LID)
- */
 function buscarSetorEUNB(idMensagem) {
     let telefoneLimpo = idMensagem.includes('@') ? idMensagem.split('@')[0] : idMensagem;
-
     let usuarioEncontrado = null;
-    let fonte = 'Nenhum';
 
-    // 1. Busca em REPRESENTANTES (Híbrido)
     const representantes = lerJsonSeguro(CAMINHO_REPRESENTANTES);
     usuarioEncontrado = representantes.find(r => 
         String(r.telefone).trim() === String(telefoneLimpo).trim() || 
         (r.lid && r.lid === idMensagem)
     );
 
-    if (usuarioEncontrado) fonte = 'Representantes';
-
-    // 2. Se não achou, busca em STAFFS
     if (!usuarioEncontrado) {
         const staffs = lerJsonSeguro(CAMINHO_STAFFS);
-        usuarioEncontrado = staffs.find(s => 
-            String(s.telefone).trim() === String(telefoneLimpo).trim()
-        );
-        if (usuarioEncontrado) fonte = 'Staffs';
+        usuarioEncontrado = staffs.find(s => String(s.telefone).trim() === String(telefoneLimpo).trim());
     }
 
-    if (!usuarioEncontrado) {
-        console.log(`[Giro] Usuário não identificado: ${telefoneLimpo}`);
-        return null;
-    }
+    if (!usuarioEncontrado) return null;
 
     const setor = String(usuarioEncontrado.setor).trim();
-    const primeiroDigito = setor.charAt(0);
-    let UNB_Filtro = (primeiroDigito === '4') ? UNB_SETOR_4 : UNB_OUTROS_SETOR;
+    const UNB_Filtro = (setor.charAt(0) === '4') ? UNB_SETOR_4 : UNB_OUTROS_SETOR;
 
-    console.log(`[Giro] Usuário identificado em ${fonte}. Setor: ${setor} -> UNB: ${UNB_Filtro}`);
     return { UNB: UNB_Filtro, setor: setor };
 }
 
@@ -118,7 +99,7 @@ async function processNextExcelRequest() {
     try {
         await nextRequest();
     } catch (error) {
-        console.error("[Giro] Erro na fila do Excel:", error);
+        console.error("[LOG] Erro na fila do Excel:", error);
     } finally {
         processNextExcelRequest();
     }
@@ -129,131 +110,157 @@ module.exports = async (client, message) => {
     const codigoPDV = message.body.replace(/\D/g, '');
     
     if (!codigoPDV) {
-        await client.sendMessage(message.from, '⚠️ Por favor, envie o código do PDV (apenas números).');
+        await client.sendMessage(message.from, '⚠️ Envie o código do PDV (apenas números).');
         return;
     }
     
-    // 1. Identificação
-    const dadosFiltro = buscarSetorEUNB(message.from);
+    console.log(`[LOG START] Nova solicitação de Giro para PDV: ${codigoPDV}`);
 
+    const dadosFiltro = buscarSetorEUNB(message.from);
     if (!dadosFiltro) {
-        await client.sendMessage(message.from, '❌ Não foi possível identificar seu Setor. Avise o APR.');
+        console.log(`[LOG] Usuário ${message.from} não identificado.`);
+        await client.sendMessage(message.from, '❌ Não identifiquei seu Setor. Contate o APR.');
         return;
     }
 
     const { UNB: UNB_Filtro } = dadosFiltro;
-    
-    // 2. Chave de Busca Combinada
     const CHAVE_BUSCA = `${UNB_Filtro}_${codigoPDV}`;
-    console.log(`[Giro] Buscando Chave: ${CHAVE_BUSCA}`);
+    console.log(`[LOG] Identificado Setor ${dadosFiltro.setor}. Chave de Busca: ${CHAVE_BUSCA}`);
 
-    await client.sendMessage(message.from, `⏳ Consultando Giro de Equipamentos para PDV *${codigoPDV}*...`);
+    await client.sendMessage(message.from, `⏳ Consultando Giro para PDV *${codigoPDV}* em Base_SPO e Base_Total...`);
 
     const requestHandler = async () => {
         try {
             if (!fs.existsSync(CAMINHO_ARQUIVO_EXCEL)) {
-                await client.sendMessage(message.from, '❌ Arquivo de Giro de Equipamentos não encontrado.');
+                console.log(`[LOG] Arquivo não encontrado em: ${CAMINHO_ARQUIVO_EXCEL}`);
+                await client.sendMessage(message.from, '❌ Arquivo de Giro não encontrado no servidor.');
                 return;
             }
 
+            console.log(`[LOG] Abrindo arquivo Excel...`);
             const workbook = new ExcelJS.Workbook();
             await workbook.xlsx.readFile(CAMINHO_ARQUIVO_EXCEL);
             
-            const aba = workbook.worksheets[0];
-            if (!aba) {
-                await client.sendMessage(message.from, '❌ Planilha vazia ou inválida.');
-                return;
+            let pdvRow = null;
+            let abaEncontrada = "";
+            const abasParaBusca = ['Base_SPO', 'Base_Total'];
+
+            for (const nomeAba of abasParaBusca) {
+                console.log(`[LOG] Procurando na aba: ${nomeAba}...`);
+                const aba = workbook.getWorksheet(nomeAba);
+                
+                if (!aba) {
+                    console.log(`[LOG] Aba ${nomeAba} não existe no arquivo.`);
+                    continue;
+                }
+
+                aba.eachRow((row, rowNumber) => {
+                    if (rowNumber > 1 && !pdvRow) {
+                        const chavePlanilha = getCellValueAsString(row.getCell(1));
+                        if (chavePlanilha === CHAVE_BUSCA) {
+                            pdvRow = row;
+                            abaEncontrada = nomeAba;
+                        }
+                    }
+                });
+
+                if (pdvRow) {
+                    console.log(`[LOG] PDV encontrado na aba ${nomeAba}!`);
+                    break;
+                }
             }
 
-            let pdvRow = null;
-
-            // Busca pela CHAVE na coluna A
-            aba.eachRow((row, rowNumber) => {
-                if (rowNumber > 1) {
-                    const chavePlanilha = getCellValueAsString(row.getCell(1)); // Coluna A
-                    if (chavePlanilha === CHAVE_BUSCA) {
-                        pdvRow = row;
-                        return false; // Encontrou, para o loop
-                    }
-                }
-            });
-
             if (pdvRow) {
-                // Extração de dados (Mapeamento das colunas conforme seu original)
-                const headerInfo = {
-                    chave: getCellValueAsString(pdvRow.getCell(1)), // A
-                    nBase: getCellValueAsString(pdvRow.getCell(2)), // B
-                    razaoSocial: getCellValueAsString(pdvRow.getCell(3)), // C
-                    gv: getCellValueAsString(pdvRow.getCell(4)), // D
-                    rn: getCellValueAsString(pdvRow.getCell(5)), // E
-                    visita: pdvRow.getCell(6).value, // F
+                console.log(`[LOG] Extraindo dados da linha encontrada...`);
+                
+                const header = {
+                    nBase: getCellValueAsString(pdvRow.getCell(2)),
+                    razaoSocial: getCellValueAsString(pdvRow.getCell(3)),
+                    gv: getCellValueAsString(pdvRow.getCell(4)),
+                    rn: getCellValueAsString(pdvRow.getCell(5)),
+                    visita: pdvRow.getCell(6).value,
                 };
 
-                const sopiInfo = {
-                    meta: parseFloat(pdvRow.getCell(8).value) || 0, // H
-                    real: parseFloat(pdvRow.getCell(9).value) || 0, // I
-                    gap: parseFloat(pdvRow.getCell(10).value) || 0, // J
-                    giroOk: getCellValueAsString(pdvRow.getCell(11)), // K
-                    vendaZero: getCellValueAsString(pdvRow.getCell(12)), // L
+                const sopi = {
+                    meta: parseFloat(pdvRow.getCell(8).value) || 0,
+                    real: parseFloat(pdvRow.getCell(9).value) || 0,
+                    gap: parseFloat(pdvRow.getCell(10).value) || 0,
+                    ok: getCellValueAsString(pdvRow.getCell(11)),
+                    zero: getCellValueAsString(pdvRow.getCell(12)),
                 };
 
-                const visaInfo = {
-                    meta: parseFloat(pdvRow.getCell(14).value) || 0, // N
-                    real: parseFloat(pdvRow.getCell(15).value) || 0, // O
-                    gap: parseFloat(pdvRow.getCell(16).value) || 0, // P
-                    giroOk: getCellValueAsString(pdvRow.getCell(17)), // Q
-                    vendaZero: getCellValueAsString(pdvRow.getCell(18)), // R
+                const visa = {
+                    meta: parseFloat(pdvRow.getCell(14).value) || 0,
+                    real: parseFloat(pdvRow.getCell(15).value) || 0,
+                    gap: parseFloat(pdvRow.getCell(16).value) || 0,
+                    ok: getCellValueAsString(pdvRow.getCell(17)),
+                    zero: getCellValueAsString(pdvRow.getCell(18)),
                 };
 
-                const sopivInfo = {
-                    giroOk: getCellValueAsString(pdvRow.getCell(20)), // T
-                    vendaZero: getCellValueAsString(pdvRow.getCell(21)), // U
-                    percentualGiro: parseFloat(pdvRow.getCell(22).value) || 0, // V
+                // NOVAS COLUNAS CHOPEIRA (Conforme imagem: X, Y, Z, AA, AB)
+                const chopeira = {
+                    meta: parseFloat(pdvRow.getCell(24).value) || 0, // X
+                    real: parseFloat(pdvRow.getCell(25).value) || 0, // Y
+                    gap: parseFloat(pdvRow.getCell(26).value) || 0,  // Z
+                    ok: getCellValueAsString(pdvRow.getCell(27)),   // AA
+                    zero: getCellValueAsString(pdvRow.getCell(28)), // AB
                 };
 
-                // Montagem da Resposta
-                let resposta = `📋 *Giro de Equipamentos - PDV ${headerInfo.nBase}*\n\n` +
-                               `🏪 ${headerInfo.razaoSocial}\n` +
-                               `👨‍💼 GV: ${headerInfo.gv} | RN: ${headerInfo.rn}\n` +
-                               `🗓️ Última Visita: ${formatarData(headerInfo.visita)}\n` +
-                               `---`;
+                const resumo = {
+                    ok: getCellValueAsString(pdvRow.getCell(20)),
+                    zero: getCellValueAsString(pdvRow.getCell(21)),
+                    percentual: (parseFloat(pdvRow.getCell(22).value) || 0) * 100,
+                };
 
-                if (sopiInfo.meta > 0 || sopiInfo.real > 0) {
-                    resposta += `\n🍺 *SOPI (Cerveja)*\n` +
-                                `Meta: ${formatarMoeda(sopiInfo.meta)} | Real: ${formatarMoeda(sopiInfo.real)}\n` +
-                                `Gap: ${formatarMoeda(sopiInfo.gap)}\n` +
-                                `Giro OK? ${sopiInfo.giroOk} | Venda Zero? ${sopiInfo.vendaZero}\n---`;
+                console.log(`[LOG] Construindo mensagem de resposta...`);
+                let msg = `📋 *Giro de Equipamentos - PDV ${header.nBase}*\n` +
+                          `📍 *Fonte:* Aba ${abaEncontrada}\n\n` +
+                          `🏪 ${header.razaoSocial}\n` +
+                          `👨‍💼 GV: ${header.gv} | RN: ${header.rn}\n` +
+                          `🗓️ Última Visita: ${formatarData(header.visita)}\n` +
+                          `---`;
+
+                if (sopi.meta > 0 || sopi.real > 0) {
+                    msg += `\n🍺 *SOPI (Cerveja)*\n` +
+                           `Meta: ${formatarMoeda(sopi.meta)} | Real: ${formatarMoeda(sopi.real)}\n` +
+                           `Gap: ${formatarMoeda(sopi.gap)}\n` +
+                           `Giro OK? ${sopi.ok} | Venda Zero? ${sopi.zero}\n---`;
                 }
 
-                if (visaInfo.meta > 0 || visaInfo.real > 0) {
-                    resposta += `\n🥤 *VISA*\n` +
-                                `Meta: ${formatarMoeda(visaInfo.meta)} | Real: ${formatarMoeda(visaInfo.real)}\n` +
-                                `Gap: ${formatarMoeda(visaInfo.gap)}\n` +
-                                `Giro OK? ${visaInfo.giroOk} | Venda Zero? ${visaInfo.vendaZero}\n---`;
+                if (visa.meta > 0 || visa.real > 0) {
+                    msg += `\n🥤 *VISA*\n` +
+                           `Meta: ${formatarMoeda(visa.meta)} | Real: ${formatarMoeda(visa.real)}\n` +
+                           `Gap: ${formatarMoeda(visa.gap)}\n` +
+                           `Giro OK? ${visa.ok} | Venda Zero? ${visa.zero}\n---`;
                 }
 
-                const percentual = sopivInfo.percentualGiro * 100;
-                const barra = gerarBarraProgresso(percentual);
+                // BLOCO CHOPEIRA
+                if (chopeira.meta > 0 || chopeira.real > 0) {
+                    msg += `\n🍺 *CHOPEIRA*\n` +
+                           `Meta: ${formatarMoeda(chopeira.meta)} | Real: ${formatarMoeda(chopeira.real)}\n` +
+                           `Gap: ${formatarMoeda(chopeira.gap)}\n` +
+                           `Giro OK? ${chopeira.ok} | Venda Zero? ${chopeira.zero}\n---`;
+                }
 
-                resposta += `\n📈 *RESUMO GERAL*\n` +
-                            `Giro OK? ${sopivInfo.giroOk}\n` +
-                            `Venda Zero? ${sopivInfo.vendaZero}\n` +
-                            `% Atingido: ${percentual.toFixed(0)}% ${barra}`;
+                const barra = gerarBarraProgresso(resumo.percentual);
+                msg += `\n📈 *RESUMO GERAL*\n` +
+                       `Giro OK? ${resumo.ok} | Venda Zero? ${resumo.zero}\n` +
+                       `% Atingido: ${resumo.percentual.toFixed(0)}% ${barra}`;
 
-                await client.sendMessage(message.from, resposta);
+                await client.sendMessage(message.from, msg);
+                console.log(`[LOG SUCCESS] Mensagem enviada para PDV ${header.nBase}`);
 
             } else {
-                await client.sendMessage(message.from, `⚠️ Nenhum dado de giro encontrado para PDV *${codigoPDV}* (Chave: ${CHAVE_BUSCA}).`);
+                console.log(`[LOG] PDV ${codigoPDV} não encontrado em nenhuma das abas.`);
+                await client.sendMessage(message.from, `⚠️ PDV *${codigoPDV}* não encontrado nas abas Base_SPO e Base_Total.`);
             }
 
         } catch (err) {
-            console.error('[Giro] Erro:', err);
-            await client.sendMessage(message.from, '❌ Erro ao ler planilha de Giro. Tente mais tarde.');
+            console.error('[LOG ERROR] Erro crítico no handler:', err);
+            await client.sendMessage(message.from, '❌ Erro ao processar dados de Giro. Tente novamente.');
         }
     };
 
     excelRequestQueue.push(requestHandler);
-    if (!isProcessingExcel) {
-        processNextExcelRequest();
-    }
+    if (!isProcessingExcel) processNextExcelRequest();
 };
