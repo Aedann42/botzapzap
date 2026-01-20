@@ -52,7 +52,7 @@ async function enviarListaContatos(client, message) {
 
         // --- TENTATIVA 1: MODO CHIQUE (LISTA) ---
         try {
-            console.log('[Contatos] Tentando enviar Lista Interativa...');
+            console.log('[enviarListaContatos] Tentando enviar Lista Interativa...');
             
             // Monta as linhas da lista
             const linhasLista = contatos.map((c, index) => ({

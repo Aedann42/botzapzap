@@ -23,7 +23,7 @@ async function enviarRelatoriosImagem(client, message, representante) {
         const pastaSetor = path.join(BASE_PATH, setor);
 
         if (!fs.existsSync(pastaSetor)) {
-            console.log(`[IMAGEM] Pasta não encontrada: ${pastaSetor}`);
+            console.log(`[enviarRelatoriosImagem.js] Pasta não encontrada: ${pastaSetor}`);
             await client.sendMessage(numero, `⚠️ A pasta de imagens do setor ${setor} não foi encontrada.`);
             return;
         }

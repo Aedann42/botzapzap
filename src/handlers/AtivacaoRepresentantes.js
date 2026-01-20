@@ -35,7 +35,7 @@ function lerJsonSeguro(caminho) {
  * Envia uma mensagem de ativação para representantes inativos.
  */
 async function enviarMenuAtivacao(client) {
-    console.log('[ATIVACAO]: Iniciando processo de ativação por inatividade...');
+    console.log('[AtivacaoRepresentantes.js]: Iniciando processo de ativação por inatividade...');
 
     try {
         const representantes = lerJsonSeguro(REPRESENTANTES_PATH);
@@ -62,7 +62,7 @@ async function enviarMenuAtivacao(client) {
             }
         }
         
-        console.log(`[ATIVACAO]: ${setoresAtivosRecentemente.size} setores estiveram ativos nos últimos 7 dias.`);
+        console.log(`[AtivacaoRepresentantes.js]: ${setoresAtivosRecentemente.size} setores estiveram ativos nos últimos 7 dias.`);
 
         // 3. Mapeia telefones da staff (para ignorar)
         // Removemos caracteres não numéricos para garantir a comparação
@@ -87,11 +87,11 @@ async function enviarMenuAtivacao(client) {
         // =======================================================================
 
         if (alvos.length === 0) {
-            console.log('[ATIVACAO]: Nenhum representante inativo encontrado.');
+            console.log('[AtivacaoRepresentantes.js]: Nenhum representante inativo encontrado.');
             return "Nenhum representante inativo para ativar. Todos interagiram recentemente ou são staff!";
         }
 
-        console.log(`[ATIVACAO]: ${alvos.length} representantes inativos encontrados.`);
+        console.log(`[AtivacaoRepresentantes.js]: ${alvos.length} representantes inativos encontrados.`);
 
         let contadorEnvios = 0;
 
@@ -108,7 +108,7 @@ async function enviarMenuAtivacao(client) {
             }
             
             try {
-                console.log(`[ATIVACAO] Enviando para ${rep.nome || 'Sem Nome'} (Setor ${rep.setor}). ID: ${idDestino}`);
+                console.log(`[AtivacaoRepresentantes.js] Enviando para ${rep.nome || 'Sem Nome'} (Setor ${rep.setor}). ID: ${idDestino}`);
                 
                 await client.sendMessage(idDestino, MENU_ATIVO);
                 contadorEnvios++;
@@ -118,14 +118,14 @@ async function enviarMenuAtivacao(client) {
                 await new Promise(resolve => setTimeout(resolve, delay));
 
             } catch (error) {
-                console.error(`[ATIVACAO] Falha ao enviar para ${idDestino}:`, error.message);
+                console.error(`[AtivacaoRepresentantes.js] Falha ao enviar para ${idDestino}:`, error.message);
             }
         }
         
         return `Campanha concluída. Mensagens enviadas para ${contadorEnvios} de ${alvos.length} representantes.`;
 
     } catch (error) {
-        console.error('[ATIVACAO]: Erro crítico:', error);
+        console.error('[AtivacaoRepresentantes.js]: Erro crítico:', error);
         return 'Ocorreu um erro grave ao executar a campanha.';
     }
 }

@@ -42,23 +42,23 @@ const client = new Client({
 });
 
 client.on('qr', qr => {
-    console.log('📱 Leia o QR Code abaixo:');
+    console.log(' [coletar_lids.js] - 📱 Leia o QR Code abaixo:');
     qrcode.generate(qr, { small: true });
 });
 
 client.on('ready', async () => {
-    console.log('✅ Conectado!');
-    console.log(`📂 Lendo JSON de: ${caminhoJsonReal}`);
+    console.log(' [coletar_lids.js] - ✅ Conectado!');
+    console.log(`[coletar_lids.js] - 📂 Lendo JSON de: ${caminhoJsonReal}`);
 
     const representantes = lerJson(caminhoJsonReal);
     let atualizados = 0;
 
-    console.log('🔍 Buscando conversas ativas (getChats)...');
+    console.log(' [coletar_lids.js] - 🔍 Buscando conversas ativas (getChats)...');
     
     try {
         // 🚀 MUDANÇA: Usamos getChats() em vez de getContacts() para evitar o crash
         const chats = await client.getChats();
-        console.log(`💬 Conversas encontradas: ${chats.length}`);
+        console.log(`[coletar_lids.js] - 💬 Conversas encontradas: ${chats.length}`);
 
         for (const chat of chats) {
             const id = chat.id._serialized; // O ID da conversa
@@ -89,7 +89,7 @@ client.on('ready', async () => {
                     const rep = representantes[index];
                     // Se achamos e ainda não tem LID salvo...
                     if (rep.lid !== id) {
-                        console.log(`🆕 LID Encontrado! Tel: ${numeroVinculado} -> LID: ${id}`);
+                        console.log(`[coletar_lids.js] - 🆕 LID Encontrado! Tel: ${numeroVinculado} -> LID: ${id}`);
                         representantes[index].lid = id;
                         atualizados++;
                     }
@@ -99,14 +99,12 @@ client.on('ready', async () => {
 
         if (atualizados > 0) {
             fs.writeFileSync(ARQUIVO_SAIDA, JSON.stringify(representantes, null, 4));
-            console.log('------------------------------------------------');
-            console.log(`✅ SUCESSO! ${atualizados} LIDs coletados.`);
-            console.log(`💾 Salvo em: ${ARQUIVO_SAIDA}`);
-            console.log('👉 Substitua seu arquivo original por este.');
-            console.log('------------------------------------------------');
+            console.log(`[coletar_lids.js] - ✅ SUCESSO! ${atualizados} LIDs coletados.`);
+            console.log(`[coletar_lids.js] - 💾 Salvo em: ${ARQUIVO_SAIDA}`);
+            console.log(' [coletar_lids.js] - 👉 Substitua seu arquivo original por este.');
         } else {
-            console.log('⚠️ Nenhum LID novo encontrado nas conversas ativas.');
-            console.log('DICA: Use o comando manual "/rep [numero] menu" para forçar o aprendizado.');
+            console.log(' [coletar_lids.js] -⚠️ Nenhum LID novo encontrado nas conversas ativas.');
+            console.log(' [coletar_lids.js] - DICA: Use o comando manual "/rep [numero] menu" para forçar o aprendizado.');
         }
 
     } catch (error) {

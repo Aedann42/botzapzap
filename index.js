@@ -53,17 +53,17 @@ const client = new Client({
 client.on('qr', qr => qrcode.generate(qr, { small: true }));
 
 client.on('ready', () => {
-    console.log('✅ Bot conectado!');
+    console.log('[index.js] - ✅ Bot conectado!');
     
     if (fs.existsSync(CAMINHO_JSON_REAL)) {
-        console.log(`📂 JSON de Representantes carregado de: ${CAMINHO_JSON_REAL}`);
+        console.log(`[index.js] - 📂 JSON de Representantes carregado de: ${CAMINHO_JSON_REAL}`);
     } else {
         console.error(`❌ ERRO CRÍTICO: Arquivo não encontrado em: ${CAMINHO_JSON_REAL}`);
     }
 
     // === AGENDAMENTOS (CRON) ===
     const TIMEZONE = "America/Sao_Paulo";
-    console.log('[AGENDADOR]: Configurando lembretes de ponto...');
+    console.log('[index.js - cron.schedule]: Configurando lembretes de ponto...');
 
     cron.schedule('55 7 * * 1-5', () => { lembretePonto(client, '7:55'); }, { timezone: TIMEZONE });
     cron.schedule('0 12 * * 1-5', () => { lembretePonto(client, '12:00'); }, { timezone: TIMEZONE });
@@ -83,7 +83,7 @@ client.on('ready', () => {
 
 JANELAS_CRON.forEach(j => {
     cron.schedule(`${j.hora} * * 1-5`, async () => {
-        console.log(`[JANELA] 🕒 Iniciando ciclo da janela ${j.label}`);
+        console.log(`[index.js] - 🕒 Iniciando ciclo da janela ${j.label}`);
         
         // 1. PRIMEIRO: Transforma todos os áudios pendentes em texto
         await transcricaoService.processarAudiosPendentes();
@@ -94,14 +94,14 @@ JANELAS_CRON.forEach(j => {
     }, { timezone: "America/Sao_Paulo" });
 });
     
-    console.log('[AGENDADOR]: Agendamentos configurados.');
+    console.log('[index.js] - Agendamentos configurados.');
 
     // === VERIFICADOR DE ARQUIVOS ===
     const INTERVALO_VERIFICACAO = 3 * 60 * 1000; 
     setInterval(async () => {
         if (Object.keys(usuariosAguardandoRelatorio).length === 0) return;
 
-        console.log(`[VERIFICADOR]: Checando para ${Object.keys(usuariosAguardandoRelatorio).length} usuários...`);
+        console.log(`[index.js] - Checando para ${Object.keys(usuariosAguardandoRelatorio).length} usuários...`);
 
         try {
             const pdfPronto = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
@@ -265,7 +265,7 @@ async function processUserMessage(message) {
     );
 
     if (!representante) {
-        console.log(`Número não autorizado: ${numeroTelefoneLimpo} (ID: ${numero})`);
+        console.log(`[index.js] - Número não autorizado: ${numeroTelefoneLimpo} (ID: ${numero})`);
         return;
     }
 
@@ -414,7 +414,7 @@ async function processUserMessage(message) {
             break;
         }
         case '9': {
-            await client.sendMessage(message.from, 'Envie o código do PDV para Giro:');
+            await client.sendMessage(message.from, 'Envie o código do PDV para Giro 🤑:');
             etapas[numero] = { etapa: 'giro_equipamentos' }; 
             //await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
@@ -423,7 +423,7 @@ async function processUserMessage(message) {
         }
         
             case '10': {
-            console.log(`[DEBUG] Iniciando MODO PEDIDO para ${numeroTelefoneLimpo}`);
+            console.log(`[index.js] - Iniciando MODO PEDIDO para ${numeroTelefoneLimpo}`);
             
             // Apenas manda o texto inicial
             await pedidoHandler.iniciarProcessamentoPedido(client, message);

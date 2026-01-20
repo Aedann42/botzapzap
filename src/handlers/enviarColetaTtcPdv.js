@@ -93,7 +93,7 @@ function buscarSetorEUNB(idMensagem) {
     }
 
     if (!usuarioEncontrado) {
-        console.log(`[TTC] Usuário não identificado: ${telefoneLimpo} (ID: ${idMensagem})`);
+        console.log(`[enviarColetaTtcPdv.js] Usuário não identificado: ${telefoneLimpo} (ID: ${idMensagem})`);
         return null;
     }
 
@@ -103,7 +103,7 @@ function buscarSetorEUNB(idMensagem) {
     // Lógica de UNB baseada no primeiro dígito do setor
     let UNB_Filtro = (primeiroDigito === '4') ? UNB_SETOR_4 : UNB_OUTROS_SETOR;
 
-    console.log(`[TTC] Usuário identificado em ${fonte}. Setor: ${setor} -> UNB: ${UNB_Filtro}`);
+    console.log(`[enviarColetaTtcPdv.js] Usuário identificado em ${fonte}. Setor: ${setor} -> UNB: ${UNB_Filtro}`);
     return { UNB: UNB_Filtro, setor: setor };
 }
 
@@ -123,7 +123,7 @@ async function processNextExcelRequest() {
     try {
         await nextRequest();
     } catch (error) {
-        console.error("[TTC] Erro na fila do Excel:", error);
+        console.error("[enviarColetaTtcPdv.js] Erro na fila do Excel:", error);
     } finally {
         processNextExcelRequest();
     }
@@ -257,7 +257,7 @@ module.exports = async (client, message) => {
             }
 
         } catch (err) {
-            console.error('[TTC] Erro ao processar Excel:', err);
+            console.error('[enviarColetaTtcPdv.js] Erro ao processar Excel:', err);
             await client.sendMessage(message.from, '❌ Erro ao ler planilha de dados. Tente novamente mais tarde.');
         }
     };

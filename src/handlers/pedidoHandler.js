@@ -116,7 +116,7 @@ module.exports = {
     },
 
     executarConversaoLote: async (client, janelaAlvo) => {
-        console.log(`[HANDLER] 🚀 Janela ${janelaAlvo}: Iniciando processamento...`);
+        console.log(`[pedidoHANDLER.js] 🚀 Janela ${janelaAlvo}: Iniciando processamento...`);
         
         // 1. FORÇA A PADRONIZAÇÃO ANTES DE QUALQUER COISA
         // Isso garante que Texto Bruto -> vire CSV antes de lermos

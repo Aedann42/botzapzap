@@ -2,7 +2,7 @@
  * Pega o texto CSV (NB/PAGAMENTO/COD/QTD/VALOR) e vira Objeto JSON
  */
 function traduzirTextoParaItens(textoProcessado) {
-    console.log("[TRADUTOR] 🔍 Iniciando tradução de texto bruto...");
+    console.log("[tradutorPedidoService.js] 🔍 Iniciando tradução de texto bruto...");
     
     const linhas = textoProcessado.split('\n');
     const itensEncontrados = [];
@@ -19,7 +19,7 @@ function traduzirTextoParaItens(textoProcessado) {
         if (!linha) return;
 
         // DEBUG da linha
-        // console.log(`[TRADUTOR] Processando linha ${idx}: ${linha}`);
+        // console.log(`[tradutorPedidoService.js] Processando linha ${idx}: ${linha}`);
 
         // Formato esperado: NB/PAGAMENTO/COD/QTD/VALOR
         const partes = linha.split('/');
@@ -58,15 +58,15 @@ function traduzirTextoParaItens(textoProcessado) {
                 itensEncontrados.push(itemObj);
                 indexItem++;
             } else {
-                console.log(`[TRADUTOR] ⚠️ Ignorando linha por código inválido: ${linha}`);
+                console.log(`[tradutorPedidoService.js] ⚠️ Ignorando linha por código inválido: ${linha}`);
             }
         } else {
              // Logs para linhas que não são CSV (ex: mensagens de erro ou texto solto)
-             if(linha.length > 5) console.log(`[TRADUTOR] ℹ️ Linha fora do formato CSV ignorada: "${linha}"`);
+             if(linha.length > 5) console.log(`[tradutorPedidoService.js] ℹ️ Linha fora do formato CSV ignorada: "${linha}"`);
         }
     });
 
-    console.log(`[TRADUTOR] ✅ Total de itens extraídos: ${itensEncontrados.length}`);
+    console.log(`[tradutorPedidoService.js] ✅ Total de itens extraídos: ${itensEncontrados.length}`);
     return itensEncontrados;
 }
 

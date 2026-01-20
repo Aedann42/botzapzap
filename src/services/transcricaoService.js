@@ -43,14 +43,14 @@ function filtrarTabelaPorContexto(tabelaInteira, textoUsuario) {
     // Se não achou nada relevante, manda um pedacinho genérico ou nada
     if (linhasRelevantes.length === 0) return "";
 
-    console.log(`[DEBUG_IA] 📉 Tabela otimizada: Enviando ${linhasRelevantes.length} produtos relevantes para a IA.`);
+    console.log(`[transcricaoService - DEBUG_IA] 📉 Tabela otimizada: Enviando ${linhasRelevantes.length} produtos relevantes para a IA.`);
     return linhasRelevantes.join('\n');
 }
 
 
 // --- 1. TRANSCRIÇÃO ---
 async function groqWhisper(caminhoArquivo) {
-    console.log(`[DEBUG_IA] 🎙️ Iniciando Whisper...`);
+    console.log(`[transcricaoService - DEBUG_IA] 🎙️ Iniciando Whisper...`);
     try {
         const form = new FormData();
         form.append('file', fs.createReadStream(caminhoArquivo));
@@ -73,7 +73,7 @@ async function groqFormatar(textoBruto) {
     // Se já é CSV, retorna
     if (textoBruto.split('/').length >= 4) return textoBruto;
 
-    console.log(`[DEBUG_IA] 🧠 Preparando contexto para: "${textoBruto}"`);
+    console.log(`[transcricaoService - DEBUG_IA] 🧠 Preparando contexto para: "${textoBruto}"`);
 
     let listaProdutos = "";
     try {
@@ -131,7 +131,7 @@ const promptSistema = `
         });
 
         const csv = response.data.choices[0].message.content.trim().replace(/```/g, '');
-        console.log(`[DEBUG_IA] ✅ Sucesso: ${csv}`);
+        console.log(`[transcricaoService - DEBUG_IA] ✅ Sucesso: ${csv}`);
         return csv;
 
     } catch (e) {
@@ -146,7 +146,7 @@ const promptSistema = `
 
 // --- PROCESSADOR GERAL ---
 const processarAudiosPendentes = async () => {
-    // console.log('[DEBUG_STEP 1] Iniciando ciclo de IA...');
+    // console.log('[ transcricaoService - DEBUG_STEP 1] Iniciando ciclo de IA...');
     const hoje = new Date().toISOString().split('T')[0];
     const pastaData = path.join(process.cwd(), 'pedidos', hoje);
 
@@ -197,7 +197,7 @@ const processarAudiosPendentes = async () => {
             if (houveAlteracao) {
                 dados.dados_brutos = novasLinhas.join('\n');
                 fs.writeFileSync(caminhoJson, JSON.stringify(dados, null, 2));
-                console.log(`[SUCESSO] Arquivo ${arquivo} atualizado.`);
+                console.log(`[transcricaoService - SUCESSO] Arquivo ${arquivo} atualizado.`);
             }
         } catch (err) {
             console.error(`[ERRO ARQUIVO] ${arquivo}:`, err.message);

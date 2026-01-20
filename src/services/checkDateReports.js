@@ -10,7 +10,7 @@ async function verificarArquivoAtualizado(caminhoDoArquivo) {
     try {
         // Verifica se o arquivo existe. Se não, já retorna falso.
         if (!fs.existsSync(caminhoDoArquivo)) {
-            console.log(`[VERIFICAÇÃO] Arquivo não encontrado: ${caminhoDoArquivo}`);
+            console.log(`[checkDateReports.js - VERIFICAÇÃO] Arquivo não encontrado: ${caminhoDoArquivo}`);
             return false;
         }
 

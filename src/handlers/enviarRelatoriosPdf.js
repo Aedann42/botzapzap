@@ -12,7 +12,7 @@ async function enviarRelatoriosPdf(client, message, representante) {
     
     try {
         if (!representante || !representante.setor) {
-            console.log(`[PDF] Erro: Setor não definido para ${numero}`);
+            console.log(`enviarRelatoriosPdf.js Erro: Setor não definido para ${numero}`);
             await client.sendMessage(numero, '❌ Não consegui identificar seu setor no cadastro.');
             return;
         }
@@ -35,7 +35,7 @@ async function enviarRelatoriosPdf(client, message, representante) {
         for (const pasta of pastasParaVerificar) {
             
             if (!fs.existsSync(pasta.caminho)) {
-                console.log(`[PDF] Pasta não encontrada: ${pasta.caminho}`);
+                console.log(`enviarRelatoriosPdf.js Pasta não encontrada: ${pasta.caminho}`);
                 // Não damos return aqui, pois pode existir a outra pasta
                 continue; 
             }
@@ -45,7 +45,7 @@ async function enviarRelatoriosPdf(client, message, representante) {
             const arquivosPdf = arquivos.filter(file => file.toLowerCase().endsWith('.pdf'));
 
             if (arquivosPdf.length > 0) {
-                console.log(`[PDF] Enviando ${arquivosPdf.length} arquivos da pasta ${pasta.nome}`);
+                console.log(`enviarRelatoriosPdf.js Enviando ${arquivosPdf.length} arquivos da pasta ${pasta.nome}`);
                 
                 for (const file of arquivosPdf) {
                     const caminhoCompleto = path.join(pasta.caminho, file);
@@ -68,7 +68,7 @@ async function enviarRelatoriosPdf(client, message, representante) {
         }
 
     } catch (error) {
-        console.error('[PDF] Erro crítico:', error);
+        console.error('enviarRelatoriosPdf.js Erro crítico:', error);
         await client.sendMessage(numero, '❌ Ocorreu um erro ao buscar os relatórios PDF.');
     }
 }

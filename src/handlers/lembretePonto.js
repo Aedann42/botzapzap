@@ -67,7 +67,7 @@ function escolherMensagem(horario) {
  * @param {string} horario - O horário que está sendo lembrado ('7:55', '12:00', etc.).
  */
 module.exports = async (client, horario) => {
-    console.log(`[AGENDADOR] Iniciando lembrete de ponto para o horário: ${horario}`);
+    console.log(`[lembretePonto.js] Iniciando lembrete de ponto para o horário: ${horario}`);
     
     // 1. Carrega e prepara a mensagem
     const mensagemFinal = escolherMensagem(horario);
@@ -82,27 +82,27 @@ module.exports = async (client, horario) => {
             return SETORES_ALVO.includes(setor);
         });
 
-        console.log(`[AGENDADOR] Enviando lembrete individual para ${representantesFiltrados.length} RNs.`);
+        console.log(`[lembretePonto.js] Enviando lembrete individual para ${representantesFiltrados.length} RNs.`);
 
         for (const rep of representantesFiltrados) {
             const telefone = rep.telefone.replace(/\D/g, '') + "@c.us";
             
             try {
                 await client.sendMessage(telefone, mensagemFinal);
-                console.log(`[AGENDADOR] ✅ Lembrete enviado para: ${rep.telefone}`);
+                console.log(`[lembretePonto.js] ✅ Lembrete enviado para: ${rep.telefone}`);
                 // Adicione um pequeno atraso para evitar ser bloqueado pelo WhatsApp
                 await new Promise(resolve => setTimeout(resolve, 500)); 
             } catch (error) {
-                console.error(`[AGENDADOR] ❌ Erro ao enviar para ${rep.telefone}:`, error.message);
+                console.error(`[lembretePonto.js] ❌ Erro ao enviar para ${rep.telefone}:`, error.message);
             }
         }
     } else {
-         console.warn('[AGENDADOR] Nenhum representante carregado ou array vazio. Pulando envio individual.');
+         console.warn('[lembretePonto.js] Nenhum representante carregado ou array vazio. Pulando envio individual.');
     }
     
     // --- PARTE 2: Envio para Grupos de Aviso ---
     if (GRUPOS_LEMBRETE.length > 0) {
-        console.log(`[AGENDADOR] Enviando lembrete para ${GRUPOS_LEMBRETE.length} grupos.`);
+        console.log(`[lembretePonto.js] Enviando lembrete para ${GRUPOS_LEMBRETE.length} grupos.`);
 
         // Atraso inicial antes de começar a enviar para grupos
         await new Promise(resolve => setTimeout(resolve, 1000)); 
@@ -110,14 +110,14 @@ module.exports = async (client, horario) => {
         for (const grupoId of GRUPOS_LEMBRETE) {
             try {
                 await client.sendMessage(grupoId, mensagemFinal);
-                console.log(`[AGENDADOR] ✅ Lembrete enviado para o Grupo ID: ${grupoId}`);
+                console.log(`[lembretePonto.js] ✅ Lembrete enviado para o Grupo ID: ${grupoId}`);
             } catch (error) {
-                console.error(`[AGENDADOR] ❌ Erro ao enviar para o Grupo ID ${grupoId}:`, error.message);
+                console.error(`[lembretePonto.js] ❌ Erro ao enviar para o Grupo ID ${grupoId}:`, error.message);
             }
         }
     } else {
-        console.warn('[AGENDADOR] Nenhum ID de grupo configurado. Pulando envio para grupos.');
+        console.warn('[lembretePonto.js] Nenhum ID de grupo configurado. Pulando envio para grupos.');
     }
 
-    console.log(`[AGENDADOR] Finalizado disparo de lembretes para ${horario}.`);
+    console.log(`[lembretePonto.js] Finalizado disparo de lembretes para ${horario}.`);
 };

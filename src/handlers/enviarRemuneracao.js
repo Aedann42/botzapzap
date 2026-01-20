@@ -24,7 +24,7 @@ function lerJsonSeguro(caminho) {
 async function processNextRemuneracaoRequest() {
     if (remuneracaoSendQueue.length === 0) {
         isSendingRemuneracao = false;
-        console.log('[Remuneração Fila] Fila vazia. Processamento em pausa.');
+        console.log('[enviarRemuneracao.js Fila] Fila vazia. Processamento em pausa.');
         return;
     }
 
@@ -32,7 +32,7 @@ async function processNextRemuneracaoRequest() {
     const { client, message, matricula } = remuneracaoSendQueue.shift();
     const numero = message.from; 
 
-    console.log(`[Remuneração Fila] Processando solicitação para ${numero} (Matrícula: ${matricula})`);
+    console.log(`[enviarRemuneracao.js Fila] Processando solicitação para ${numero} (Matrícula: ${matricula})`);
 
     try {
         let telefoneLimpo;
@@ -50,7 +50,7 @@ async function processNextRemuneracaoRequest() {
         );
 
         if (!representante || !representante.setor) {
-            console.log(`[Remuneração] Erro: Usuário não encontrado ou sem setor. ID: ${numero}`);
+            console.log(`[enviarRemuneracao.js] Erro: Usuário não encontrado ou sem setor. ID: ${numero}`);
             await client.sendMessage(numero, '❌ Seus dados não foram encontrados no cadastro de representantes ou você não possui setor definido.');
             return; 
         }
@@ -62,10 +62,10 @@ async function processNextRemuneracaoRequest() {
             setor
         );
 
-        console.log("📁 Tentando acessar a pasta em:", diretorioPath);
+        console.log("[enviarRemuneracao.js] 📁 Tentando acessar a pasta em:", diretorioPath);
 
         if (!fs.existsSync(diretorioPath)) {
-            await client.sendMessage(numero, `❌ A pasta de remuneração para o setor ${setor} não foi encontrada.`);
+            await client.sendMessage(numero, `❌ A pasta de enviarRemuneracao.js para o setor ${setor} não foi encontrada.`);
             return; 
         }
 
@@ -87,7 +87,7 @@ async function processNextRemuneracaoRequest() {
 
             const media = MessageMedia.fromFilePath(caminhoCompletoArquivo);
             
-            console.log(`[Remuneração Fila] Enviando arquivo "${nomeArquivo}" para ${numero}.`);
+            console.log(`[enviarRemuneracao.js Fila] Enviando arquivo "${nomeArquivo}" para ${numero}.`);
             await client.sendMessage(numero, media, {
                 sendMediaAsDocument: true,
                 caption: `📄 Segue o arquivo: ${nomeArquivo}`
@@ -96,11 +96,11 @@ async function processNextRemuneracaoRequest() {
 
         await client.sendMessage(numero, '✅ Todos os seus arquivos foram enviados com sucesso!');
         //await client.sendSeen(numero);
-        console.log(`[Remuneração Fila] Arquivos enviados com sucesso para ${numero}.`);
+        console.log(`[enviarRemuneracao.js Fila] Arquivos enviados com sucesso para ${numero}.`);
 
     } catch (err) {
-        console.error("❌ Erro inesperado ao processar remuneração na fila:", err);
-        await client.sendMessage(numero, "❌ Ocorreu um erro ao enviar sua planilha de remuneração. Por favor, tente novamente mais tarde.");
+        console.error("❌ Erro inesperado ao processar enviarRemuneracao.js na fila:", err);
+        await client.sendMessage(numero, "❌ Ocorreu um erro ao enviar sua planilha de enviarRemuneracao.js. Por favor, tente novamente mais tarde.");
     } finally {
         processNextRemuneracaoRequest();
     }
@@ -122,13 +122,13 @@ async function enviarRemuneracao(client, message) {
         if (etapas[numero]) {
             delete etapas[numero];
             escreverJson(ETAPAS_PATH, etapas);
-            await client.sendMessage(numero, '🚫 Operação de remuneração cancelada.');
+            await client.sendMessage(numero, '🚫 Operação de enviarRemuneracao.js cancelada.');
         }
         return;
     }
 
     if (isOperatorRequest) {
-        console.log(`[OPERADOR] Requisição de remuneração para ${numero}`);
+        console.log(`[OPERADOR] Requisição de enviarRemuneracao.js para ${numero}`);
         
         let telefoneLimpo = numero.includes('@') ? numero.split('@')[0] : numero;
         
@@ -190,7 +190,7 @@ async function enviarRemuneracao(client, message) {
         escreverJson(ETAPAS_PATH, etapas);
 
         remuneracaoSendQueue.push({ client, message, matricula });
-        console.log(`[Remuneração] Usuário ${numero} adicionado à fila.`);
+        console.log(`[enviarRemuneracao.js] Usuário ${numero} adicionado à fila.`);
 
         if (!isSendingRemuneracao) {
             processNextRemuneracaoRequest();

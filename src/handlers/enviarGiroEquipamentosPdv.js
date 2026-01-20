@@ -57,7 +57,7 @@ function lerJsonSeguro(caminho) {
     try {
         return JSON.parse(fs.readFileSync(caminho, 'utf-8'));
     } catch (e) {
-        console.error(`[LOG] Erro ao ler JSON ${caminho}:`, e);
+        console.error(`[enviarGiroEquipamentosPdv.js] Erro ao ler JSON ${caminho}:`, e);
         return [];
     }
 }
@@ -99,7 +99,7 @@ async function processNextExcelRequest() {
     try {
         await nextRequest();
     } catch (error) {
-        console.error("[LOG] Erro na fila do Excel:", error);
+        console.error("[enviarGiroEquipamentosPdv.js] Erro na fila do Excel:", error);
     } finally {
         processNextExcelRequest();
     }
@@ -114,30 +114,30 @@ module.exports = async (client, message) => {
         return;
     }
     
-    console.log(`[LOG START] Nova solicitação de Giro para PDV: ${codigoPDV}`);
+    console.log(`[enviarGiroEquipamentosPdv.js] Nova solicitação de Giro para PDV: ${codigoPDV}`);
 
     const dadosFiltro = buscarSetorEUNB(message.from);
     if (!dadosFiltro) {
-        console.log(`[LOG] Usuário ${message.from} não identificado.`);
+        console.log(`[enviarGiroEquipamentosPdv.js] Usuário ${message.from} não identificado.`);
         await client.sendMessage(message.from, '❌ Não identifiquei seu Setor. Contate o APR.');
         return;
     }
 
     const { UNB: UNB_Filtro } = dadosFiltro;
     const CHAVE_BUSCA = `${UNB_Filtro}_${codigoPDV}`;
-    console.log(`[LOG] Identificado Setor ${dadosFiltro.setor}. Chave de Busca: ${CHAVE_BUSCA}`);
+    console.log(`[enviarGiroEquipamentosPdv.js] Identificado Setor ${dadosFiltro.setor}. Chave de Busca: ${CHAVE_BUSCA}`);
 
     await client.sendMessage(message.from, `⏳ Consultando Giro para PDV *${codigoPDV}* em Base_SPO e Base_Total...`);
 
     const requestHandler = async () => {
         try {
             if (!fs.existsSync(CAMINHO_ARQUIVO_EXCEL)) {
-                console.log(`[LOG] Arquivo não encontrado em: ${CAMINHO_ARQUIVO_EXCEL}`);
+                console.log(`[enviarGiroEquipamentosPdv.js] Arquivo não encontrado em: ${CAMINHO_ARQUIVO_EXCEL}`);
                 await client.sendMessage(message.from, '❌ Arquivo de Giro não encontrado no servidor.');
                 return;
             }
 
-            console.log(`[LOG] Abrindo arquivo Excel...`);
+            console.log(`[enviarGiroEquipamentosPdv.js] Abrindo arquivo Excel...`);
             const workbook = new ExcelJS.Workbook();
             await workbook.xlsx.readFile(CAMINHO_ARQUIVO_EXCEL);
             
@@ -146,11 +146,11 @@ module.exports = async (client, message) => {
             const abasParaBusca = ['Base_SPO', 'Base_Total'];
 
             for (const nomeAba of abasParaBusca) {
-                console.log(`[LOG] Procurando na aba: ${nomeAba}...`);
+                console.log(`[enviarGiroEquipamentosPdv.js] Procurando na aba: ${nomeAba}...`);
                 const aba = workbook.getWorksheet(nomeAba);
                 
                 if (!aba) {
-                    console.log(`[LOG] Aba ${nomeAba} não existe no arquivo.`);
+                    console.log(`[enviarGiroEquipamentosPdv.js] Aba ${nomeAba} não existe no arquivo.`);
                     continue;
                 }
 
@@ -165,13 +165,13 @@ module.exports = async (client, message) => {
                 });
 
                 if (pdvRow) {
-                    console.log(`[LOG] PDV encontrado na aba ${nomeAba}!`);
+                    console.log(`[enviarGiroEquipamentosPdv.js] PDV encontrado na aba ${nomeAba}!`);
                     break;
                 }
             }
 
             if (pdvRow) {
-                console.log(`[LOG] Extraindo dados da linha encontrada...`);
+                console.log(`[enviarGiroEquipamentosPdv.js] Extraindo dados da linha encontrada...`);
                 
                 const header = {
                     nBase: getCellValueAsString(pdvRow.getCell(2)),
@@ -212,7 +212,7 @@ module.exports = async (client, message) => {
                     percentual: (parseFloat(pdvRow.getCell(22).value) || 0) * 100,
                 };
 
-                console.log(`[LOG] Construindo mensagem de resposta...`);
+                console.log(`[enviarGiroEquipamentosPdv.js] Construindo mensagem de resposta...`);
                 let msg = `📋 *Giro de Equipamentos - PDV ${header.nBase}*\n` +
                           `📍 *Fonte:* Aba ${abaEncontrada}\n\n` +
                           `🏪 ${header.razaoSocial}\n` +
@@ -248,15 +248,15 @@ module.exports = async (client, message) => {
                        `% Atingido: ${resumo.percentual.toFixed(0)}% ${barra}`;
 
                 await client.sendMessage(message.from, msg);
-                console.log(`[LOG SUCCESS] Mensagem enviada para PDV ${header.nBase}`);
+                console.log(`[enviarGiroEquipamentosPdv.js] Mensagem enviada para PDV ${header.nBase}`);
 
             } else {
-                console.log(`[LOG] PDV ${codigoPDV} não encontrado em nenhuma das abas.`);
+                console.log(`[enviarGiroEquipamentosPdv.js] PDV ${codigoPDV} não encontrado em nenhuma das abas.`);
                 await client.sendMessage(message.from, `⚠️ PDV *${codigoPDV}* não encontrado nas abas Base_SPO e Base_Total.`);
             }
 
         } catch (err) {
-            console.error('[LOG ERROR] Erro crítico no handler:', err);
+            console.error('[enviarGiroEquipamentosPdv.js] Erro crítico no handler:', err);
             await client.sendMessage(message.from, '❌ Erro ao processar dados de Giro. Tente novamente.');
         }
     };

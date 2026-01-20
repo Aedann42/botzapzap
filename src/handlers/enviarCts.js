@@ -68,13 +68,13 @@ module.exports = async (client, message, representante) => {
     
     // 1. Validação Inicial
     if (!representante || !representante.setor) {
-        console.log('[CT] Erro: Representante sem setor definido.');
+        console.log('[enviarCts.js] - Erro: Representante sem setor definido.');
         await client.sendMessage(message.from, '❌ Não consegui identificar seu setor no cadastro.');
         return;
     }
 
     const setorUsuario = representante.setor;
-    console.log(`🔍 Buscando CTs para o setor: ${setorUsuario}`);
+    console.log(`[enviarCts.js] - 🔍 Buscando CTs para o setor: ${setorUsuario}`);
 
     // 2. Definição do Caminho do Arquivo
     const arquivo = path.join(
@@ -100,7 +100,7 @@ module.exports = async (client, message, representante) => {
 
                 const workbook = new ExcelJS.Workbook();
                 await workbook.xlsx.readFile(arquivo);
-                console.log('✅ Planilha de Bonificação (CT) carregada.');
+                console.log('[enviarCts.js]- ✅ Planilha de Bonificação (CT) carregada.');
 
                 const aba = workbook.getWorksheet('Base CT');
                 
