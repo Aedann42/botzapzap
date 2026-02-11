@@ -3,7 +3,7 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
-const cron = require('node-cron');
+//const cron = require('node-cron');
 const transcricaoService = require('./src/services/transcricaoService');
 const { lerJson, registrarUso, ETAPAS_PATH, ATENDIDOS_PATH, STAFFS_PATH } = require('./src/utils/dataHandler.js');
 
@@ -80,29 +80,29 @@ client.on('ready', () => {
     }
 
     // === AGENDAMENTOS (CRON) ===
-    const TIMEZONE = "America/Sao_Paulo";
-    cron.schedule('55 7 * * 1-5', () => { lembretePonto(client, '7:55'); }, { timezone: TIMEZONE });
-    cron.schedule('0 12 * * 1-5', () => { lembretePonto(client, '12:00'); }, { timezone: TIMEZONE });
-    cron.schedule('45 17 * * 1-5', () => { lembretePonto(client, '17:45'); }, { timezone: TIMEZONE });
+    //const TIMEZONE = "America/Sao_Paulo";
+    //cron.schedule('55 7 * * 1-5', () => { lembretePonto(client, '7:55'); }, { timezone: TIMEZONE });
+   // cron.schedule('0 12 * * 1-5', () => { lembretePonto(client, '12:00'); }, { timezone: TIMEZONE });
+    //cron.schedule('45 17 * * 1-5', () => { lembretePonto(client, '17:45'); }, { timezone: TIMEZONE });
     
-    const JANELAS_CRON = [
-        { hora: '00 13', label: '13h00' }, { hora: '30 13', label: '13h30' },
-        { hora: '00 14', label: '14h00' }, { hora: '30 14', label: '14h30' },
-        { hora: '00 15', label: '15h00' }, { hora: '30 15', label: '15h30' },
-        { hora: '00 16', label: '16h00' }, { hora: '30 16', label: '16h30' }
-    ];
+    //const JANELAS_CRON = [
+    //    { hora: '00 13', label: '13h00' }, { hora: '30 13', label: '13h30' },
+    //    { hora: '00 14', label: '14h00' }, { hora: '30 14', label: '14h30' },
+   //     { hora: '00 15', label: '15h00' }, { hora: '30 15', label: '15h30' },
+    //    { hora: '00 16', label: '16h00' }, { hora: '30 16', label: '16h30' }
+   // ];
 
-    JANELAS_CRON.forEach(j => {
-        cron.schedule(`${j.hora} * * 1-5`, async () => {
-            console.log(`[index.js] - 🕒 Janela ${j.label}`);
-            await transcricaoService.processarAudiosPendentes();
-            await pedidoHandler.executarConversaoLote(client, j.label);
-        }, { timezone: "America/Sao_Paulo" });
-    });
+//    JANELAS_CRON.forEach(j => {
+//        cron.schedule(`${j.hora} * * 1-5`, async () => {
+//            console.log(`[index.js] - 🕒 Janela ${j.label}`);
+//            await transcricaoService.processarAudiosPendentes();
+//            await pedidoHandler.executarConversaoLote(client, j.label);
+//        }, { timezone: "America/Sao_Paulo" });
+//    });
     
-    // ========================================================================================
-    // === VERIFICADOR DE ARQUIVOS (LÓGICA CORRIGIDA DO 302) ===
-    // ========================================================================================
+/// ========================================================================================
+// === VERIFICADOR DE ARQUIVOS (LÓGICA CORRIGIDA DO 302) ===
+// ========================================================================================
     const INTERVALO_VERIFICACAO = 3 * 60 * 1000; 
     setInterval(async () => {
         if (Object.keys(usuariosAguardandoRelatorio).length === 0) return;
