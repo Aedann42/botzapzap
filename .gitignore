@@ -9,6 +9,7 @@ node_modules/
 # Dados da revenda
 contatos.json
 atendidos.json
+atendidosForaDaBase.json
 representantes.json
 senhaRemuneracao.json
 /logs
@@ -17,6 +18,7 @@ stafs.json
 .env
 .session
 data/tabelaPrecos.txt
+
 
 # Pasta de sessão do WhatsApp
 /.session
