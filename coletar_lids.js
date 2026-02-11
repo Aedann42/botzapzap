@@ -38,7 +38,7 @@ const lerJson = (caminho) => {
 
 const client = new Client({
     authStrategy: new LocalAuth({ dataPath: '.session' }),
-    puppeteer: { headless: true, args: ['--no-sandbox'] }
+    puppeteer: { headless: false, args: ['--no-sandbox'] }
 });
 
 client.on('qr', qr => {

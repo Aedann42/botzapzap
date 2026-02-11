@@ -4,7 +4,7 @@ const path = require('path');
 
 // Caminho atualizado para DEZEMBRO conforme sua solicitação
 const CAMINHO_ARQUIVO_EXCEL = path.join(
-    '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\1 - janeiro\\_GERADOR PDF\\',
+    '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\2 - FEVEREIRO\\_GERADOR PDF\\',
     'Acomp Tarefas do Dia.xlsx'
 );
 
@@ -184,7 +184,7 @@ async function enviarResumoPDV(client, message, representante) {
             msg += `📅 Criado: ${t.dataCriacao} | Visita: ${t.dataVisita}\n`;
             if(t.dataConclusao !== '-') msg += `🏁 Conclusão: ${t.dataConclusao}\n`;
             
-            msg += `📋 Status: Comp:${t.completaStr} | Val:${t.validadaStr} | Pre:${t.preValidadaStr}\n`;
+            msg += `📋 Status: \n Completa:${t.completaStr} | Validada:${t.validadaStr} | Pré validada:${t.preValidadaStr}\n`;
             
             if (t.justificativa) msg += `⚠️ Justificativa: ${t.justificativa}\n`;
             if (t.pontos > 0) msg += `⭐ Pontos: ${t.pontos}\n`;

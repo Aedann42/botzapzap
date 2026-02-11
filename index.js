@@ -7,21 +7,21 @@ const cron = require('node-cron');
 const transcricaoService = require('./src/services/transcricaoService');
 const { lerJson, registrarUso, ETAPAS_PATH, ATENDIDOS_PATH, STAFFS_PATH } = require('./src/utils/dataHandler.js');
 
-// Adicione junto com os outros requires no topo
 const verificarArquivoAtualizado = require('./src/services/checkDateReports');
-
 
 // 🚨 CAMINHO FORÇADO PARA O JSON (PASTA DATA)
 const CAMINHO_JSON_REAL = path.join(__dirname, 'data', 'representantes.json');
+const FORA_BASE_PATH = path.join(__dirname, 'data', 'atendidosForaDaBase.json');
 
 // VOZ EXTRA & HANDLER DE PEDIDOS
 const pedidoHandler = require('./src/handlers/pedidoHandler');
 
-// IMPORTANTE: Estes caminhos devem ser acessíveis (leitura) pelo servidor
-const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\1 - janeiro\\_GERADOR PDF\\ACOMPS\\410\\410_MKTPTT.pdf';
-const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\1 - janeiro\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_3.jpg'
+// Caminhos de CHECAGEM (Usados apenas para saber se o processo do servidor terminou)
+const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\2 - FEVEREIRO\\_GERADOR PDF\\ACOMPS\\410\\410_MKTPTT.pdf';
+const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\2 - FEVEREIRO\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_3.jpg';
 
 const MENU_TEXT = require('./src/config/menuOptions');
+const MENSAGEM_PDV = require('./src/config/mensagemPDV'); // <--- NOVA IMPORTAÇÃO
 
 // Handlers
 const enviarRelatoriosImagem = require('./src/handlers/enviarRelatoriosImagem');
@@ -40,86 +40,128 @@ let atendidos = lerJson(ATENDIDOS_PATH, []);
 const staffs = lerJson(STAFFS_PATH, []);
 const usuariosAguardandoRelatorio = {};
 
-// 1. INICIALIZAÇÃO DO CLIENTE
+// ============================================================================================
+// === 1. INICIALIZAÇÃO (SESSÃO FIXA + BLINDAGEM) ===
+// ============================================================================================
+
+// 🚨 MUDANÇA: Nome fixo para não pedir QR Code toda hora
+const idSessao = 'sessao-principal-v1'; 
+console.log(`🚀 [BOOT] Iniciando bot na sessão fixa: ${idSessao}`);
+
 const client = new Client({
-    authStrategy: new LocalAuth({ dataPath: '.session' }),
-    webCacheType: 'remote', 
+    authStrategy: new LocalAuth({ clientId: idSessao }),
     puppeteer: {
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        headless: true, // Mude para true quando quiser esconder o navegador
+        executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--disable-gpu' 
+        ]
     }
 });
 
-client.on('qr', qr => qrcode.generate(qr, { small: true }));
+client.on('qr', qr => {
+    console.log('📸 [QR CODE] Escaneie abaixo (Isso deve acontecer só uma vez):');
+    qrcode.generate(qr, { small: true });
+});
 
 client.on('ready', () => {
-    console.log('[index.js] - ✅ Bot conectado!');
+    console.log('[index.js] - ✅ Bot conectado e operacional!');
     
     if (fs.existsSync(CAMINHO_JSON_REAL)) {
-        console.log(`[index.js] - 📂 JSON de Representantes carregado de: ${CAMINHO_JSON_REAL}`);
+        console.log(`[index.js] - 📂 JSON carregado: ${CAMINHO_JSON_REAL}`);
     } else {
-        console.error(`❌ ERRO CRÍTICO: Arquivo não encontrado em: ${CAMINHO_JSON_REAL}`);
+        console.error(`❌ ERRO: JSON não encontrado em: ${CAMINHO_JSON_REAL}`);
     }
 
     // === AGENDAMENTOS (CRON) ===
     const TIMEZONE = "America/Sao_Paulo";
-    console.log('[index.js - cron.schedule]: Configurando lembretes de ponto...');
-
     cron.schedule('55 7 * * 1-5', () => { lembretePonto(client, '7:55'); }, { timezone: TIMEZONE });
     cron.schedule('0 12 * * 1-5', () => { lembretePonto(client, '12:00'); }, { timezone: TIMEZONE });
     cron.schedule('45 17 * * 1-5', () => { lembretePonto(client, '17:45'); }, { timezone: TIMEZONE });
     
-    // === AGENDADOR DE JANELAS DE PEDIDOS ===
     const JANELAS_CRON = [
-        { hora: '00 13', label: '13h00' },
-        { hora: '30 13', label: '13h30' },
-        { hora: '00 14', label: '14h00' },
-        { hora: '30 14', label: '14h30' },
-        { hora: '00 15', label: '15h00' },
-        { hora: '30 15', label: '15h30' },
-        { hora: '00 16', label: '16h00' },
-        { hora: '30 16', label: '16h30' }
+        { hora: '00 13', label: '13h00' }, { hora: '30 13', label: '13h30' },
+        { hora: '00 14', label: '14h00' }, { hora: '30 14', label: '14h30' },
+        { hora: '00 15', label: '15h00' }, { hora: '30 15', label: '15h30' },
+        { hora: '00 16', label: '16h00' }, { hora: '30 16', label: '16h30' }
     ];
 
-JANELAS_CRON.forEach(j => {
-    cron.schedule(`${j.hora} * * 1-5`, async () => {
-        console.log(`[index.js] - 🕒 Iniciando ciclo da janela ${j.label}`);
-        
-        // 1. PRIMEIRO: Transforma todos os áudios pendentes em texto
-        await transcricaoService.processarAudiosPendentes();
-
-        // 2. SEGUNDO: Processa o texto (que agora já contém os números) para itens
-        await pedidoHandler.executarConversaoLote(client, j.label);
-        
-    }, { timezone: "America/Sao_Paulo" });
-});
+    JANELAS_CRON.forEach(j => {
+        cron.schedule(`${j.hora} * * 1-5`, async () => {
+            console.log(`[index.js] - 🕒 Janela ${j.label}`);
+            await transcricaoService.processarAudiosPendentes();
+            await pedidoHandler.executarConversaoLote(client, j.label);
+        }, { timezone: "America/Sao_Paulo" });
+    });
     
-    console.log('[index.js] - Agendamentos configurados.');
-
-    // === VERIFICADOR DE ARQUIVOS ===
+    // ========================================================================================
+    // === VERIFICADOR DE ARQUIVOS (LÓGICA CORRIGIDA DO 302) ===
+    // ========================================================================================
     const INTERVALO_VERIFICACAO = 3 * 60 * 1000; 
     setInterval(async () => {
         if (Object.keys(usuariosAguardandoRelatorio).length === 0) return;
-
-        console.log(`[index.js] - Checando para ${Object.keys(usuariosAguardandoRelatorio).length} usuários...`);
+        
+        console.log(`[VERIFICADOR] Checando para ${Object.keys(usuariosAguardandoRelatorio).length} usuários...`);
 
         try {
+            // 1. Verifica se os arquivos "mestre" existem (sinal que o servidor terminou)
             const pdfPronto = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
             const imagemPronta = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
 
             if (!pdfPronto && !imagemPronta) return;
 
+            // 2. Recarrega a lista para garantir
+            let listaReps = [];
+            try {
+                listaReps = JSON.parse(fs.readFileSync(CAMINHO_JSON_REAL, 'utf-8'));
+            } catch (e) { console.error('Erro ao ler JSON no verificador'); return; }
+
             const notificados = [];
+
             for (const userNumero in usuariosAguardandoRelatorio) {
                 const tipoEsperado = usuariosAguardandoRelatorio[userNumero];
+                
+                // 🔥 CORREÇÃO: Busca Estrita (LID Prioritário também aqui)
+                const rep = listaReps.find(r => {
+                    const rTel = String(r.telefone || "").replace(/\D/g, '');
+                    const uTel = String(userNumero).replace(/\D/g, '');
+                    
+                    // Validação por LID
+                    if (r.lid) {
+                        const lidLimpo = String(r.lid).split('@')[0];
+                        const userLimpo = String(userNumero).split('@')[0];
+                        if (lidLimpo === userLimpo) return true;
+                    }
+
+                    // Validação por Telefone
+                    if (rTel.length < 10) return false;
+                    return uTel.endsWith(rTel) || rTel.endsWith(uTel);
+                });
+
+                if (!rep) {
+                    console.log(`⚠️ [VERIFICADOR] Rep não encontrado para o número: ${userNumero}`);
+                    continue; 
+                }
+
+                // Cria mock msg para usar os handlers existentes
+                const mockMsg = { from: userNumero };
 
                 if (tipoEsperado === 'pdf' && pdfPronto) {
-                    const mediaPdf = MessageMedia.fromFilePath(CAMINHO_CHECK_PDF); 
-                    await client.sendMessage(userNumero, mediaPdf, { caption: "🎉 Seu relatório PDF chegou!" });
+                    console.log(`✅ [AUTO-ENVIO] Enviando PDF de: ${rep.nome} (Cod: ${rep.codigo})`);
+                    await enviarRelatoriosPdf(client, mockMsg, rep); 
+                    await client.sendMessage(userNumero, "🎉 O relatório que você pediu chegou!");
                     notificados.push(userNumero);
-                } else if (tipoEsperado === 'imagem' && imagemPronta) {
-                    const mediaImagem = MessageMedia.fromFilePath(CAMINHO_CHECK_IMAGEM);
-                    await client.sendMessage(userNumero, mediaImagem, { caption: "🎉 Seu relatório Imagem chegou!" });
+                } 
+                else if (tipoEsperado === 'imagem' && imagemPronta) {
+                    console.log(`✅ [AUTO-ENVIO] Enviando Imagem de: ${rep.nome} (Cod: ${rep.codigo})`);
+                    await enviarRelatoriosImagem(client, mockMsg, rep);
+                    await client.sendMessage(userNumero, "🎉 O relatório que você pediu chegou!");
                     notificados.push(userNumero);
                 }
             }
@@ -128,7 +170,7 @@ JANELAS_CRON.forEach(j => {
                 for (const user of notificados) delete usuariosAguardandoRelatorio[user];
             }
         } catch (error) {
-            console.error('[VERIFICADOR]: Erro:', error);
+            console.error('[VERIFICADOR]: Erro crítico:', error);
         }
     }, INTERVALO_VERIFICACAO);
 });
@@ -143,26 +185,16 @@ client.on('message_create', async (message) => {
     const body = message.body.trim(); 
 
     if (body.toLowerCase() === '/ativar') {
-        console.log('[OPERADOR]: /ativar');
-        await client.sendMessage(message.to, '🤖 Iniciando ativação...');
         const res = await enviarMenuAtivacao(client);
         await client.sendMessage(message.to, `✅ ${res}`);
         return;
     }
 
-// Comando para forçar o processamento manual de uma janela
     if (body.toLowerCase().startsWith('/processar')) {
-        const janelaManual = body.split(' ')[1]; // Ex: 15h30
+        const janelaManual = body.split(' ')[1];
         if (!janelaManual) return await client.sendMessage(message.to, "❌ Use: /processar 15h30");
-        
-        await client.sendMessage(message.to, `⚙️ Forçando processamento da janela ${janelaManual}...`);
-        
-        // --- ADICIONE ESTA LINHA AQUI 👇 ---
-        console.log('[MANUAL] 🎧 Iniciando transcrição forçada...');
-        const transcricaoService = require('./src/services/transcricaoService'); // Garanta que está importado
+        await client.sendMessage(message.to, `⚙️ Processando janela ${janelaManual}...`);
         await transcricaoService.processarAudiosPendentes();
-        // -----------------------------------
-
         await pedidoHandler.executarConversaoLote(client, janelaManual);
         return;
     }
@@ -172,10 +204,7 @@ client.on('message_create', async (message) => {
 
     if (prefixoUsado) {
         let args = body.substring(prefixoUsado.length).trim();
-        if (!args) {
-            console.log('[OPERADOR]: Use /rep [NUMERO] [COMANDO]');
-            return;
-        }
+        if (!args) return;
 
         let targetUser = message.to; 
         let commandForUser = args;   
@@ -191,36 +220,11 @@ client.on('message_create', async (message) => {
             possivelNumero = args.replace(/\D/g, ''); 
         }
 
-        // AUTO-SAVE: FORÇA BRUTA
         if (possivelNumero.length >= 10) {
-            console.log(`[OPERADOR]: Comando manual para telefone: ${possivelNumero}`);
-            
-            if (targetUser.includes('@lid')) {
-                try {
-                    const rawData = fs.readFileSync(CAMINHO_JSON_REAL, 'utf-8');
-                    const representantes = JSON.parse(rawData);
-
-                    const index = representantes.findIndex(r => 
-                        String(r.telefone).trim() === String(possivelNumero).trim()
-                    );
-
-                    if (index !== -1) {
-                        if (representantes[index].lid !== targetUser) {
-                            representantes[index].lid = targetUser;
-                            fs.writeFileSync(CAMINHO_JSON_REAL, JSON.stringify(representantes, null, 4));
-                            await client.sendMessage(message.to, `🤖 [SISTEMA] Vínculo salvo!`);
-                        }
-                    } 
-                } catch (err) {
-                    console.error(`❌ [AUTO-LEARN]: Erro ao gravar:`, err);
-                }
-            }
-
+            console.log(`[OPERADOR] Comando para: ${possivelNumero}`);
             targetUser = possivelNumero + '@c.us'; 
             commandForUser = restoDoComando;       
         }
-
-        console.log(`[OPERADOR]: Executando '${commandForUser}' como ${targetUser}`);
 
         const mockMessage = {
             from: targetUser,
@@ -240,79 +244,114 @@ async function processUserMessage(message) {
     if (message.from === 'status@broadcast') return;
 
     const numero = message.from; 
-
-    let numeroTelefoneLimpo;
-    if (numero.includes('@')) {
-        numeroTelefoneLimpo = numero.split('@')[0];
-    } else {
-        numeroTelefoneLimpo = numero;
-    }
+    let numeroTelefoneLimpo = numero.includes('@') ? numero.split('@')[0] : numero;
 
     if (!numeroTelefoneLimpo) return; 
 
-    // Lê o JSON atualizado
+    // --- 1. Validação de Segurança ---
     let representantes = [];
     try {
         const rawData = fs.readFileSync(CAMINHO_JSON_REAL, 'utf-8');
         representantes = JSON.parse(rawData);
-    } catch (e) {
-        console.error('Erro ao ler representantes:', e);
-    }
+    } catch (e) { console.error('❌ Erro JSON:', e); return; }
     
-    const representante = representantes.find(rep => 
-        String(rep.telefone).trim() === String(numeroTelefoneLimpo).trim() || 
-        (rep.lid && rep.lid === numero)
-    );
+    // 🔥 BUSCA OTIMIZADA (Telefone ou LID)
+    const representante = representantes.find(rep => {
+        // 1. Tenta comparar pelo LID (Prioritário)
+        if (rep.lid) {
+            const lidLimpo = String(rep.lid).split('@')[0];
+            if (numeroTelefoneLimpo === lidLimpo || numero === rep.lid) return true;
+        }
 
+        // 2. Tenta comparar pelo Telefone (se o LID não bater)
+        const repTel = String(rep.telefone || "").replace(/\D/g, ''); 
+        const msgTel = String(numeroTelefoneLimpo).replace(/\D/g, '');
+        
+        if (repTel.length >= 10) {
+            return msgTel.endsWith(repTel) || repTel.endsWith(msgTel);
+        }
+
+        return false;
+    });
+
+    // --- Tratamento para quem NÃO está na base ---
     if (!representante) {
-        console.log(`[index.js] - Número não autorizado: ${numeroTelefoneLimpo} (ID: ${numero})`);
-        return;
+        // Ignora se for o operador forçando comando, senão envia msg de erro
+        if (message._operator_triggered) {
+             console.log(`🚫 [OPERADOR] Alvo não encontrado no JSON: ${numeroTelefoneLimpo}`);
+             return;
+        }
+
+        // Carrega lista de bloqueados/atendidos fora da base
+        let foraDaBase = [];
+        if (fs.existsSync(FORA_BASE_PATH)) {
+            foraDaBase = lerJson(FORA_BASE_PATH, []);
+        }
+
+        const hoje = new Date().toISOString().split('T')[0]; // Data YYYY-MM-DD
+        
+        // Verifica se já foi atendido HOJE
+        const jaAtendidoHoje = foraDaBase.some(at => at.id === numero && at.data === hoje);
+
+        if (!jaAtendidoHoje) {
+            console.log(`🚫 [FORA DA BASE] Enviando informativo para: ${numeroTelefoneLimpo}`);
+            
+            await client.sendMessage(numero, MENSAGEM_PDV);
+
+            // Salva no log para não repetir hoje
+            foraDaBase.push({ 
+                id: numero, 
+                telefone: numeroTelefoneLimpo, 
+                data: hoje,
+                hora: new Date().toLocaleTimeString('pt-BR')
+            });
+            fs.writeFileSync(FORA_BASE_PATH, JSON.stringify(foraDaBase, null, 2));
+        } else {
+            console.log(`⏳ [FORA DA BASE] ${numeroTelefoneLimpo} já recebeu o informativo hoje. Ignorando.`);
+        }
+        return; // ENCERRA AQUI, não mostra o menu
     }
 
-    // Verifica Atendidos / Staff
+    // --- 2. Início do Fluxo (Se for Representante Válido) ---
     const idPermanente = message.from; 
 
     if (!atendidos.includes(idPermanente) && !staffs.some(staff => String(staff.telefone) === numeroTelefoneLimpo)) {
+        console.log(`✅ [NOVO] Atendimento para: ${representante.nome} (${representante.codigo})`);
+        
         const hora = new Date().getHours();
         const saudacaoBase = hora <= 12 ? 'Bom dia' : (hora <= 18 ? 'Boa tarde' : 'Boa noite');
-        const saudacoesAlternativas = [
-            'Como posso ajudar?', 'Tudo bem por aí?', 'É um prazer falar com você.',
-            'Estou à disposição.', 'O que mandas?', 'Que bom receber seu contato.'
-        ];
-        const saudacaoAleatoria = saudacoesAlternativas[Math.floor(Math.random() * saudacoesAlternativas.length)];
-
-        await client.sendMessage(message.from, `${saudacaoBase}! ${saudacaoAleatoria}\n${MENU_TEXT}`);
+        
+        await client.sendMessage(message.from, `${saudacaoBase}! Sou o assistente virtual.\n${MENU_TEXT}`);
 
         atendidos.push(idPermanente);
         fs.writeFileSync(ATENDIDOS_PATH, JSON.stringify(atendidos, null, 2));
         return;
     }
 
+    // --- 3. Processamento de Etapas/Menus ---
     const opcao = message.body.trim();
     let etapas = lerJson(ETAPAS_PATH, {});
 
-    // --- VERIFICAÇÃO DE ETAPAS ATIVAS ---
     if (etapas[numero] && etapas[numero].etapa) {
         const etapaAtual = etapas[numero].etapa;
-
         try {
             if (etapaAtual === 'pdv') {
                 await enviarResumoPDV(client, message, representante); 
-                await registrarUso(numeroTelefoneLimpo, 'Consulta PDV');
+                await registrarUso(numeroTelefoneLimpo, 'Consulta PDV',representante.setor);
                 delete etapas[numero];
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
                 return;
             }
             if (etapaAtual === 'coleta_ttc') {
                 await enviarColetaTtcPdv(client, message);
-                await registrarUso(numeroTelefoneLimpo, 'Consulta TTC');
+                await registrarUso(numeroTelefoneLimpo, 'Consulta TTC',representante.setor);
                 delete etapas[numero];
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
                 return;
             }
             if (etapaAtual === 'giro_equipamentos') {
                 await enviarGiroEquipamentosPdv(client, message, representante);
-                await registrarUso(numeroTelefoneLimpo, 'Consulta Giro');
+                await registrarUso(numeroTelefoneLimpo, 'Consulta Giro',representante.setor);
                 delete etapas[numero];
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
                 return;
@@ -325,20 +364,14 @@ async function processUserMessage(message) {
                 await enviarListaContatos(client, message);
                 return;
             }
-            
-            // 🚨 NOVO: MODO PEDIDO (ÁUDIO/TEXTO/EDITAR) 🚨
             if (etapaAtual === 'wait') {
-                // Passa a responsabilidade para o handler. Ele decide se continua ou finaliza.
                 const resultado = await pedidoHandler.processarMensagem(client, message);
-                
-                // Se o usuário digitou "MENU" lá dentro, o handler retorna 'FINALIZAR'
                 if (resultado === 'FINALIZAR') {
                     delete etapas[numero];
                     fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
                 }
-                return; // Impede que o bot processe o "MENU" novamente no switch abaixo
+                return;
             }
-
         } catch (error) {
             console.error(`Erro etapa "${etapaAtual}" para ${numero}:`, error);
             await client.sendMessage(numero, '❌ Erro ao processar. Tente novamente.');
@@ -350,14 +383,14 @@ async function processUserMessage(message) {
 
     const MSG_INDISPONIVEL = '⚠️ Relatórios ainda não gerados. Avisarei quando estiverem prontos! 🤖';
 
-    // --- MENU PRINCIPAL ---
     switch (opcao.toLowerCase()) {
         case '1': { 
-            //await client.sendSeen(numero);
             const pronto = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
             if (pronto) {
+                // 👇 GARANTIA QUE VAI O ARQUIVO CERTO
+                console.log(`[MANUAL] Enviando PDF para: ${representante.nome} (Cod: ${representante.codigo})`);
                 await enviarRelatoriosPdf(client, message, representante);
-                await registrarUso(numeroTelefoneLimpo, 'Relatório PDF');
+                await registrarUso(numeroTelefoneLimpo, 'Relatório PDF', representante.setor);
                 if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
                 delete usuariosAguardandoRelatorio[numero]; 
             } else {
@@ -367,11 +400,11 @@ async function processUserMessage(message) {
             break;
         }
         case '2': {
-            //await client.sendSeen(numero);
             const pronto = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
             if (pronto) {
+                console.log(`[MANUAL] Enviando Imagem para: ${representante.nome} (Cod: ${representante.codigo})`);
                 await enviarRelatoriosImagem(client, message, representante);
-                await registrarUso(numeroTelefoneLimpo, 'Relatório Imagem');
+                await registrarUso(numeroTelefoneLimpo, 'Relatório Imagem', representante.setor);
                 if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
                 delete usuariosAguardandoRelatorio[numero];
             } else {
@@ -381,85 +414,86 @@ async function processUserMessage(message) {
             break;
         }
         case '3':
-            await client.sendMessage(message.from, 'Descreva sua demanda (com NB e prints se necessário).');
-            await registrarUso(numeroTelefoneLimpo, 'Suporte Manual');
+            await client.sendMessage(message.from, 'Envie mensagem para o Yuri APR 3299982517 com nb e print do problema');
+            await registrarUso(numeroTelefoneLimpo, 'Suporte Manual', representante.setor);
             break;
         case '4':
             await enviarRemuneracao(client, message);
-            await registrarUso(numeroTelefoneLimpo, 'Remuneração');
+            await registrarUso(numeroTelefoneLimpo, 'Remuneração', representante.setor);
             break;
         case '5':
             await client.sendMessage(message.from, 'Envie o código do PDV (apenas números):');
             etapas[numero] = { etapa: 'pdv' };
-            //await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-            await registrarUso(numeroTelefoneLimpo, 'Início PDV');
+            await registrarUso(numeroTelefoneLimpo, 'Início PDV', representante.setor);
             break;
         case '6':
-            //await client.sendSeen(numero);
             await enviarListaContatos(client, message);
-            await registrarUso(numeroTelefoneLimpo, 'Lista Contatos');
+            await registrarUso(numeroTelefoneLimpo, 'Lista Contatos', representante.setor);
             break;
         case '7': {
             await client.sendMessage(message.from, 'Envie o código do PDV para Coleta TTC:');
             etapas[numero] = { etapa: 'coleta_ttc' };
-            //await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-            await registrarUso(numeroTelefoneLimpo, 'Início TTC');
+            await registrarUso(numeroTelefoneLimpo, 'Início TTC',representante.setor);
             break;
         }
         case '8': {
             await enviarCts(client, message, representante); 
-            await registrarUso(numeroTelefoneLimpo, 'Consulta CT');
+            await registrarUso(numeroTelefoneLimpo, 'Consulta CT',representante.setor);
             break;
         }
         case '9': {
             await client.sendMessage(message.from, 'Envie o código do PDV para Giro 🤑:');
             etapas[numero] = { etapa: 'giro_equipamentos' }; 
-            //await client.sendSeen(numero);
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-            await registrarUso(numeroTelefoneLimpo, 'Início Giro');
+            await registrarUso(numeroTelefoneLimpo, 'Início Giro'), representante.setor;
             break;
         }
-        
-            case '10': {
+        case '10': {
             console.log(`[index.js] - Iniciando MODO PEDIDO para ${numeroTelefoneLimpo}`);
-            
-            // Apenas manda o texto inicial
             await pedidoHandler.iniciarProcessamentoPedido(client, message);
-            
-            // Seta estado wait
             etapas[numero] = { etapa: 'wait' }; 
-            
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-            await registrarUso(numeroTelefoneLimpo, 'Início Pedido');
+            await registrarUso(numeroTelefoneLimpo, 'Início Pedido', representante.setor);
             break;
         }
-
         case 'menu':
             const hora = new Date().getHours();
             const saudacao = hora < 12 ? 'Bom dia' : (hora < 18 ? 'Boa tarde' : 'Boa noite');
             await client.sendMessage(message.from, `${saudacao}!\n${MENU_TEXT}`);
-            //await client.sendSeen(numero);
             if (etapas[numero]) {
                 delete etapas[numero].tentativasInvalidas;
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             }
-            await registrarUso(numeroTelefoneLimpo, 'Menu');
+            await registrarUso(numeroTelefoneLimpo, 'Menu', representante.setor);
             break;
     }
 }
 
 client.on('message', async message => {
+    // LOG DE MONITORAMENTO
+    const contactName = message._data.notifyName || message.from.split('@')[0];
+    console.log(`🔔 [EVENTO] Msg de: ${contactName} | Texto: ${message.body}`);
+    
+    // Proteção para mensagens de STATUS (evita erro)
     if (message.from === 'status@broadcast') return;
+
+    // Lógica para GRUPOS (Com proteção Anti-Crash)
     if (message.from.endsWith('@g.us')) {
-        const chat = await message.getChat();
-        await chat.sendSeen();
+        try {
+            // Tenta marcar como lido, mas se falhar, apenas avisa no console e não derruba o bot
+            const chat = await message.getChat();
+            await chat.sendSeen();
+        } catch (err) {
+            console.log(`⚠️ [GRUPO] Não foi possível marcar como lido (Ignorando erro): ${err.message}`);
+        }
         return; 
     }
+
+    // Processa mensagens privadas normalmente
     await processUserMessage(message);
 });
-
 client.initialize();
 
 client.on('disconnected', reason => { console.error('⚠️ Desconectado:', reason); process.exit(1); });

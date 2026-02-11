@@ -3,7 +3,9 @@ const fs = require('fs');
 const path = require('path');
 
 // --- Caminhos dos Arquivos de Dados ---
+// Ajuste de navegação: src > utils > (..) src > (..) root > data
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+// Se a pasta logs não existir, o node pode dar erro ao salvar, então vamos garantir o caminho
 const LOGS_DIR = path.join(__dirname, '..', '..', 'logs');
 
 const REPRESENTANTES_PATH = path.join(DATA_DIR, 'representantes.json');
@@ -14,9 +16,6 @@ const STAFFS_PATH = path.join(DATA_DIR, 'staffs.json');
 
 /**
  * Lê um arquivo JSON de forma segura.
- * @param {string} filePath O caminho completo para o arquivo JSON.
- * @param {*} defaultValue O valor a ser retornado se o arquivo não existir.
- * @returns {object|Array} O conteúdo do arquivo JSON ou o valor padrão.
  */
 function lerJson(filePath, defaultValue = {}) {
     try {
@@ -31,11 +30,14 @@ function lerJson(filePath, defaultValue = {}) {
 
 /**
  * Escreve dados em um arquivo JSON de forma segura.
- * @param {string} filePath O caminho completo para o arquivo JSON.
- * @param {object|Array} data Os dados a serem escritos no arquivo.
  */
 function escreverJson(filePath, data) {
     try {
+        // Garante que a pasta existe antes de escrever (evita erro no LOGS_DIR)
+        const dir = path.dirname(filePath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
         fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
     } catch (error) {
         console.error(`Erro ao salvar o arquivo JSON ${filePath}:`, error);
@@ -44,36 +46,51 @@ function escreverJson(filePath, data) {
 
 /**
  * Registra o uso de uma funcionalidade no log.
- * @param {string} numero O número do usuário com sufixo @c.us.
+ * @param {string} numero O número do usuário.
  * @param {string} nomeFuncao O nome da função utilizada.
+ * @param {string} [setorParam] (Opcional) O setor já identificado no index.js.
  */
-async function registrarUso(numero, nomeFuncao) {
+async function registrarUso(numero, nomeFuncao, setorParam = null) {
     try {
-        const representantes = lerJson(REPRESENTANTES_PATH, []);
+        let setorFinal = setorParam;
+
+        // Lógica de Fallback: Se o index.js não mandou o setor, tentamos achar aqui
+        // (Isso mantem compatibilidade caso alguma parte do código antigo chame essa função)
+        if (!setorFinal) {
+            const representantes = lerJson(REPRESENTANTES_PATH, []);
+            // Limpeza básica para tentar achar
+            const numeroLimpo = String(numero).replace('@c.us', '').replace(/\D/g, '');
+            
+            const representante = representantes.find(rep => {
+                const repTel = String(rep.telefone || "").replace(/\D/g, '');
+                return (rep.lid && rep.lid === numero) || (repTel && numeroLimpo.endsWith(repTel));
+            });
+            
+            setorFinal = representante ? representante.setor : 'Não Identificado';
+        }
+
         const logUso = lerJson(LOG_USO_PATH, []);
-
-        const numeroLimpo = numero.replace('@c.us', '');
-        const representante = representantes.find(rep => rep.telefone === numeroLimpo);
-        
-        const setor = representante ? representante.setor : 'Não Identificado';
-
         const timestamp = new Date();
+
         const novoRegistro = {
             timestamp: timestamp.toISOString(),
-            data: timestamp.toISOString().split('T')[0],
-            setor: setor,
+            data: timestamp.toLocaleDateString('pt-BR'), // Ex: 11/02/2026
+            hora: timestamp.toLocaleTimeString('pt-BR'), // Ex: 14:30:00
+            telefone: numero.replace('@c.us', ''),
+            setor: setorFinal,
             funcao: nomeFuncao
         };
 
         logUso.push(novoRegistro);
         escreverJson(LOG_USO_PATH, logUso);
-        console.log(`[LOG] Ação registrada: Setor ${setor} | ${nomeFuncao}`);
+        
+        console.log(`📝 [LOG] Setor: ${setorFinal} | Ação: ${nomeFuncao}`);
+        
     } catch (error) {
         console.error('Erro ao registrar o uso:', error);
     }
 }
 
-// Exportamos as funções e os caminhos para serem usados em outros arquivos
 module.exports = {
     lerJson,
     escreverJson,
