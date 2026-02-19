@@ -1,5 +1,5 @@
 // src/config/mensagemPDV.js
-const mensagemPDV = `Olá! Caso esteja entrando em contato com a Tarumã seguem nossos contatos:
+const mensagemPDV = `Olá! Caso esteja entrando em contato com a Tarumã seguem nossos numeros:
 * 📝 *Cadastro:* (32) 9988-6629
 * 💰 *Financeiro:* (32) 9959-9721
 * 📞 *Central de Atendimento:* (32) 3691-8200 - Apenas ligação

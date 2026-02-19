@@ -18,7 +18,7 @@ const pedidoHandler = require('./src/handlers/pedidoHandler');
 
 // Caminhos de CHECAGEM (Usados apenas para saber se o processo do servidor terminou)
 const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\2 - FEVEREIRO\\_GERADOR PDF\\ACOMPS\\410\\410_MKTPTT.pdf';
-const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\2 - FEVEREIRO\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_3.jpg';
+const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\2 - FEVEREIRO\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_1.jpg';
 
 const MENU_TEXT = require('./src/config/menuOptions');
 const MENSAGEM_PDV = require('./src/config/mensagemPDV'); // <--- NOVA IMPORTAÇÃO

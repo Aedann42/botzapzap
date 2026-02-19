@@ -180,7 +180,7 @@ async function enviarRemuneracao(client, message) {
         // --- CORREÇÃO AQUI ---
         if (!credencialValida) {
             // Corrigido para usar crases e a variável 'matricula'
-            await client.sendMessage(numero, `❌ Você digitou "${matricula}". Matrícula incorreta para o seu setor.`);
+            await client.sendMessage(numero, `❌ Você digitou "${matricula}". Matrícula incorreta para o seu setor. Peça a opção 4 novamente!`);
             delete etapas[numero];
             escreverJson(ETAPAS_PATH, etapas);
             return;
