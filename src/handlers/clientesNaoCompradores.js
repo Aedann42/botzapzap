@@ -37,6 +37,12 @@ function obterAbaMesPassado() {
     return meses[mesPassado];
 }
 
+function obterDiaVisitaHoje() {
+    const diasDaSemana = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
+    const hoje = new Date().getDay(); // 0 é Domingo, 1 é Segunda...
+    return diasDaSemana[hoje];
+}
+
 // --- FUNÇÃO PRINCIPAL ---
 module.exports = async (client, message, representante) => {
     const numero = message.from;
@@ -57,16 +63,23 @@ module.exports = async (client, message, representante) => {
     const colunaAlvo = COLUNAS_PRODUTIVIDADE[indicadorDesejado];
     const mesReferencia = obterAbaMesPassado();
     const arquivoHistoricoCsv = path.join(PASTA_BANCO_DADOS, `2026_${mesReferencia}.csv`);
+    const diaHoje = obterDiaVisitaHoje();
 
     console.log(`\n==================================================`);
-    console.log(`🚀 [NAO COMPRADORES] Iniciando busca para Setor ${setorDoUsuario} | Indicador: ${indicadorDesejado}`);
+    console.log(`🚀 [NAO COMPRADORES] Setor ${setorDoUsuario} | Ind: ${indicadorDesejado} | Dia: ${diaHoje}`);
     console.log(`==================================================`);
 
-    await client.sendMessage(numero, `⏳ Gerando lista de não compradores para *${indicadorDesejado}*...\n_Isso pode levar alguns segundos._`);
+    // Se for fim de semana, já avisa de cara para não gastar processamento
+    if (diaHoje === 'SAB' || diaHoje === 'DOM') {
+        await client.sendMessage(numero, `🏖️ Bom descanso! Hoje é ${diaHoje} e não há visitas programadas na rota regular.`);
+        return;
+    }
+
+    await client.sendMessage(numero, `⏳ Gerando lista de não compradores de *HOJE (${diaHoje})* para *${indicadorDesejado}*...\n_Isso pode levar alguns segundos._`);
 
     try {
         // ==========================================
-        // PASSO 1: LER ACOMP PERFORMANCE
+        // PASSO 1: LER ACOMP PERFORMANCE (Filtrando por HOJE)
         // ==========================================
         if (!fs.existsSync(ARQUIVO_PERFORMANCE)) throw new Error("Arquivo Performance não encontrado");
         
@@ -83,28 +96,31 @@ module.exports = async (client, message, representante) => {
 
             const setorPlanilha = row.getCell('E').text.trim();
             const valorIndicador = parseFloat(row.getCell(colunaAlvo).value) || 0;
+            const visitaPlanilha = row.getCell('F').text.trim().toUpperCase();
 
-            if (setorPlanilha === setorDoUsuario && valorIndicador === 0) {
+            // 🔥 O SEGREDO ESTÁ AQUI: Só entra se for do setor, zerado E se a visita tiver a sigla de hoje
+            if (setorPlanilha === setorDoUsuario && valorIndicador === 0 && visitaPlanilha.includes(diaHoje)) {
                 const chave = row.getCell('A').text.trim();
                 
                 if (chave) {
                     clientesZerados.push({
                         chave: chave,
                         razaoSocial: row.getCell('C').text,
-                        visita: row.getCell('F').text,
+                        visita: visitaPlanilha,
                         historicoMesPassado: [],
                         faturamentoTotal: 0,
-                        skusUnicos: new Set() // Set para não duplicar os códigos dos produtos
+                        skusUnicos: new Set(),
+                        produtosAgregados: {} // Criado para somar faturamento de cada produto
                     });
                     chavesParaBuscar.add(chave);
                 }
             }
         });
 
-        console.log(`✅ Encontrados ${clientesZerados.length} clientes zerados no setor ${setorDoUsuario}.`);
+        console.log(`✅ Encontrados ${clientesZerados.length} clientes zerados COM VISITA HOJE no setor ${setorDoUsuario}.`);
 
         if (clientesZerados.length === 0) {
-            await client.sendMessage(numero, `🎉 *Parabéns!* Nenhum cliente do setor ${setorDoUsuario} está zerado em ${indicadorDesejado}.`);
+            await client.sendMessage(numero, `🎉 *Sensacional!* Nenhum cliente da sua rota de *HOJE (${diaHoje})* está zerado em ${indicadorDesejado}.`);
             return;
         }
 
@@ -135,14 +151,21 @@ module.exports = async (client, message, representante) => {
                             const valor = parseFloat(strValor) || 0;
 
                             const codProduto = linha['Cod.Produto'] || linha['Desc.Produto'] || 'Sem Código';
+                            const nomeProduto = linha['Desc.Produto'] || 'Produto Desconhecido';
 
                             cliente.historicoMesPassado.push({
-                                produto: linha['Desc.Produto'] || 'Produto Desconhecido',
+                                produto: nomeProduto,
                                 totalVenda: valor
                             });
                             
                             cliente.faturamentoTotal += valor;
-                            cliente.skusUnicos.add(codProduto); // Adiciona o SKU único na coleção
+                            cliente.skusUnicos.add(codProduto); 
+                            
+                            // Acumula o valor por produto para conseguirmos fazer a %
+                            if (!cliente.produtosAgregados[nomeProduto]) {
+                                cliente.produtosAgregados[nomeProduto] = 0;
+                            }
+                            cliente.produtosAgregados[nomeProduto] += valor;
                         }
                     }
                 })
@@ -157,25 +180,25 @@ module.exports = async (client, message, representante) => {
         // ==========================================
         console.log(`[3/3] Montando mensagem visual...`);
         
-        // Ordena por maior faturamento
+        // Ordena por maior faturamento do cliente
         clientesZerados.sort((a, b) => b.faturamentoTotal - a.faturamentoTotal);
 
-        // Conta quantos tem venda zero no mês passado
+        // Conta quantos têm venda zero no mês passado
         const pdvsZeroAbsoluto = clientesZerados.filter(c => c.historicoMesPassado.length === 0).length;
 
-        let msg = `📉 *NÃO COMPRADORES | ${indicadorDesejado}*\n`;
+        let msg = `📉 *NÃO COMPRADORES HOJE | ${indicadorDesejado}*\n`;
         msg += `📍 Setor: ${setorDoUsuario}  |  🗓️ Ref: ${mesReferencia}\n`;
-        msg += `🛑 *Total de não compradores na rota: ${clientesZerados.length}*\n`;
+        msg += `🛑 *Total de não compradores na rota hoje (${diaHoje}): ${clientesZerados.length}*\n`;
         
-        // AVISO DINÂMICO DE VENDAS ZERO
+        // AVISO DINÂMICO DE VENDAS ZERO MANTIDO
         if (pdvsZeroAbsoluto > 0) {
-            msg += `\n🚨 *AVISO:* ${pdvsZeroAbsoluto} PDVs ainda não compraram este mês e são *venda zero* no mês passado!\n`;
+            msg += `\n🚨 *AVISO:* ${pdvsZeroAbsoluto} PDVs da sua rota de hoje ainda não compraram este mês e também são *venda zero* no mês passado!\n`;
         }
         
         msg += `-------------------------------------------\n\n`;
 
         clientesZerados.forEach((c, index) => {
-            msg += `🏪 *${index + 1}. ${c.razaoSocial}*\n`;
+            msg += `🏪 ${index + 1}. ${c.razaoSocial}\n`;
             msg += `🗝️ Chave: ${c.chave}  |  📅 Visita: ${c.visita}\n\n`;
             
             if (c.historicoMesPassado.length === 0) {
@@ -187,11 +210,20 @@ module.exports = async (client, message, representante) => {
                 
                 msg += `🛒 *Principais Itens Levados:*\n`;
                 
-                // Exibe até os 3 principais produtos (removendo as duplicatas da visualização)
-                const itensVisualizacao = [...new Set(c.historicoMesPassado.map(h => h.produto))];
-                const exemplos = itensVisualizacao.slice(0, 3).map(p => `▫️ ${p}`).join('\n');
+                // Transforma o objeto agregado em array, ordena por valor, recorta os 3 primeiros e calcula a %
+                const top3Produtos = Object.entries(c.produtosAgregados)
+                    .sort((a, b) => b[1] - a[1]) // Ordena pelo faturamento de cada item (maior pro menor)
+                    .slice(0, 3) // Pega os 3 maiores
+                    .map(item => {
+                        const nomeItem = item[0];
+                        const valorItem = item[1];
+                        // Calcula a porcentagem do peso do item em relação ao faturamento total do cliente
+                        const percentual = c.faturamentoTotal > 0 ? ((valorItem / c.faturamentoTotal) * 100).toFixed(1) : 0;
+                        return `▫️ ${nomeItem}\n   └ ${formatarMoeda(valorItem)} (${percentual}%)`;
+                    })
+                    .join('\n');
                 
-                msg += `${exemplos}\n`;
+                msg += `${top3Produtos}\n`;
             }
             msg += `\n➖ ➖ ➖ ➖ ➖ ➖ ➖ ➖ ➖ ➖\n\n`;
         });

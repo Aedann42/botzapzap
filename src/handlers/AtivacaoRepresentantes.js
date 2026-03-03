@@ -68,7 +68,7 @@ module.exports = async (client, message, representante) => {
     const indicadorDesejado = MAPA_OPCOES[opcaoDigitada];
 
     if (!indicadorDesejado) {
-        await client.sendMessage(numero, `⚠️ Opção inválida. Por favor, digite apenas um número de 1 a 11 correspondente ao menu anterior.`);
+        await client.sendMessage(numero, `⚠️ Opção inválida. Por favor, digite apenas um número de 1 a 11 correspondente ao menu anterior. Tente novamente enviando a opção 11!`);
         return;
     }
 
