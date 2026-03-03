@@ -8,7 +8,7 @@ async function enviarRelatoriosPdf(client, message, representante) {
     const numero = message.from;
 
     // 🚨 AJUSTE O CAMINHO BASE CONFORME NECESSÁRIO
-    const BASE_PATH = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2026\2 - FEVEREIRO\_GERADOR PDF\ACOMPS`;
+    const BASE_PATH = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2026\3 - MARÇO\_GERADOR PDF\ACOMPS`;
     
     try {
         if (!representante || !representante.setor) {

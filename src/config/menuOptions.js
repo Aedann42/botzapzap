@@ -11,10 +11,13 @@ const MENU_TEXT = `
 7️⃣ - Consultar Coleta TTC do PDV 📈🏪
 8️⃣ - Consultar Bonificação do setor (CT) 🎁
 9️⃣ - Consultar Giro de Equipamentos do PDV 🔄🏪 
+🔟 - Corrigir Setor e Matrícula 🔄✏️
+1️⃣1️⃣ - Consultar Clientes Não Compradores 📉🚫
+
+⚠️ *Aviso (Opção 11):* No começo do mês, pelo alto número de não compradores, recomendamos *não* usar a função 11 para evitar travamentos ou mensagens gigantescas.
 
 Digite *MENU* a qualquer momento para receber novamente essa mensagem
 
-Atenção! O WhatsappWeb tem enfrentado lentidão. Mande a mensagem e aguarde a resposta, caso não recebe mande o "MENU".
 `;
 
 module.exports = MENU_TEXT;

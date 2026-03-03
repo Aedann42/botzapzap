@@ -18,8 +18,10 @@ stafs.json
 .env
 .session
 data/tabelaPrecos.txt
+data/solicitacoes.json
+data/hist
 src/config/mensagemPDV.js
-
+data/rep.json
 
 
 # Pasta de sessão do WhatsApp

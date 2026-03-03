@@ -8,17 +8,15 @@ const transcricaoService = require('./src/services/transcricaoService');
 const { lerJson, registrarUso, ETAPAS_PATH, ATENDIDOS_PATH, STAFFS_PATH } = require('./src/utils/dataHandler.js');
 
 const verificarArquivoAtualizado = require('./src/services/checkDateReports');
+const { processarTroca, aprovarTroca } = require('./src/handlers/mudancaSetor');
 
 // 🚨 CAMINHO FORÇADO PARA O JSON (PASTA DATA)
 const CAMINHO_JSON_REAL = path.join(__dirname, 'data', 'representantes.json');
 const FORA_BASE_PATH = path.join(__dirname, 'data', 'atendidosForaDaBase.json');
 
-// VOZ EXTRA & HANDLER DE PEDIDOS
-const pedidoHandler = require('./src/handlers/pedidoHandler');
-
 // Caminhos de CHECAGEM (Usados apenas para saber se o processo do servidor terminou)
-const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\2 - FEVEREIRO\\_GERADOR PDF\\ACOMPS\\410\\410_MKTPTT.pdf';
-const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\2 - FEVEREIRO\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_1.jpg';
+const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\3 - MARÇO\\_GERADOR PDF\\ACOMPS\\410\\410_Volume.pdf';
+const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\3 - MARÇO\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_1.jpg';
 
 const MENU_TEXT = require('./src/config/menuOptions');
 const MENSAGEM_PDV = require('./src/config/mensagemPDV'); // <--- NOVA IMPORTAÇÃO
@@ -33,7 +31,8 @@ const enviarMenuAtivacao = require('./src/handlers/AtivacaoRepresentantes.js');
 const enviarColetaTtcPdv = require('./src/handlers/enviarColetaTtcPdv');
 const enviarCts = require('./src/handlers/enviarCts');
 const enviarGiroEquipamentosPdv = require('./src/handlers/enviarGiroEquipamentosPdv');
-const lembretePonto = require('./src/handlers/lembretePonto'); 
+//const lembretePonto = require('./src/handlers/lembretePonto'); 
+const clientesNaoCompradores = require('./src/handlers/clientesNaoCompradores');
 
 // Variáveis de Estado
 let atendidos = lerJson(ATENDIDOS_PATH, []);
@@ -198,6 +197,13 @@ client.on('message_create', async (message) => {
         await pedidoHandler.executarConversaoLote(client, janelaManual);
         return;
     }
+    if (body.toLowerCase().startsWith('/aprovar')) {
+        const telefoneAlvo = body.split(' ')[1];
+        if (!telefoneAlvo) return await client.sendMessage(message.from, "❌ Use: /aprovar numerodotelefone");
+        
+        await aprovarTroca(client, message, telefoneAlvo);
+        return;
+    }
 
     const prefixosAceitos = ['/representante', '/rep', '/admin'];
     const prefixoUsado = prefixosAceitos.find(p => body.toLowerCase().startsWith(p));
@@ -244,7 +250,19 @@ async function processUserMessage(message) {
     if (message.from === 'status@broadcast') return;
 
     const numero = message.from; 
-    let numeroTelefoneLimpo = numero.includes('@') ? numero.split('@')[0] : numero;
+    const texto = message.body.trim(); // Pegando o texto da mensagem
+
+    // 🚨 GATILHO DE ADMINISTRAÇÃO (YURI)
+    if (texto.toLowerCase().startsWith('/aprovar')) {
+        const telefoneAlvo = texto.split(' ')[1];
+        if (!telefoneAlvo) return await client.sendMessage(message.from, "❌ Use: /aprovar numerodotelefone");
+        
+        await aprovarTroca(client, message, telefoneAlvo);
+        return; // Retorna para o bot não tentar mostrar o menu normal
+    }
+
+    let numeroTelefoneLimpo = numero.split('@')[0];
+
 
     if (!numeroTelefoneLimpo) return; 
 
@@ -332,7 +350,7 @@ async function processUserMessage(message) {
     const opcao = message.body.trim();
     let etapas = lerJson(ETAPAS_PATH, {});
 
-    if (etapas[numero] && etapas[numero].etapa) {
+if (etapas[numero] && etapas[numero].etapa) {
         const etapaAtual = etapas[numero].etapa;
         try {
             if (etapaAtual === 'pdv') {
@@ -365,11 +383,27 @@ async function processUserMessage(message) {
                 return;
             }
             if (etapaAtual === 'wait') {
-                const resultado = await pedidoHandler.processarMensagem(client, message);
-                if (resultado === 'FINALIZAR') {
-                    delete etapas[numero];
-                    fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-                }
+                // ATENÇÃO: Como você comentou o importe do pedidoHandler lá em cima, 
+                // comentei a chamada aqui também para não dar erro se cair nessa etapa.
+                // const resultado = await pedidoHandler.processarMensagem(client, message);
+                // if (resultado === 'FINALIZAR') {
+                //    delete etapas[numero];
+                //    fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+                // }
+                return;
+            }
+            
+            // 👇 BLOCO NOVO (AGORA TOTALMENTE SEPARADO DO WAIT)
+            if (etapaAtual === 'clientes_nao_compradores') {
+                await clientesNaoCompradores(client, message, representante);
+                await registrarUso(numeroTelefoneLimpo, 'Consulta Nao Compradores', representante.setor);
+                delete etapas[numero];
+                fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+                return;
+            } 
+            
+            if (etapaAtual === 'troca_setor_passo1' || etapaAtual === 'troca_setor_passo2') {
+                await processarTroca(client, message, representante);
                 return;
             }
         } catch (error) {
@@ -451,11 +485,32 @@ async function processUserMessage(message) {
             break;
         }
         case '10': {
-            console.log(`[index.js] - Iniciando MODO PEDIDO para ${numeroTelefoneLimpo}`);
-            await pedidoHandler.iniciarProcessamentoPedido(client, message);
-            etapas[numero] = { etapa: 'wait' }; 
+            await client.sendMessage(message.from, '🔄 *CORRIGIR SETOR E MATRÍCULA*\n\nPor favor, digite apenas o *NÚMERO DO SETOR* que você vai assumir:');
+            etapas[numero] = { etapa: 'troca_setor_passo1' }; 
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-            await registrarUso(numeroTelefoneLimpo, 'Início Pedido', representante.setor);
+            await registrarUso(numeroTelefoneLimpo, 'Início Troca Setor', representante.setor);
+            break;
+        }
+case '11': {
+            const menuIndicadores = `📉 *CLIENTES NÃO COMPRADORES*\n\n` +
+                                    `Qual indicador você deseja analisar? (Digite apenas o número)\n\n` +
+                                    `*1* - AMBEV\n` +
+                                    `*2* - MKTP\n` +
+                                    `*3* - CERV\n` +
+                                    `*4* - MATCH\n` +
+                                    `*5* - CERV RGB\n` +
+                                    `*6* - CERV 1/1\n` +
+                                    `*7* - CERV 300\n` +
+                                    `*8* - MEGABRANDS\n` +
+                                    `*9* - NAB\n` +
+                                    `*10* - RED BULL\n` +
+                                    `*11* - R$ MKTP`;
+            
+            await client.sendMessage(message.from, menuIndicadores);
+            
+            etapas[numero] = { etapa: 'clientes_nao_compradores' };
+            fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+            await registrarUso(numeroTelefoneLimpo, 'Início Clientes Nao Compradores', representante.setor);
             break;
         }
         case 'menu':

@@ -6,7 +6,7 @@ const { MessageMedia } = require('whatsapp-web.js');
 const { escreverJson, ETAPAS_PATH } = require('../utils/dataHandler.js');
 
 const CAMINHO_REPRESENTANTES = path.join(process.cwd(), 'data', 'representantes.json');
-const CAMINHO_SENHAS = path.join(process.cwd(), 'data', 'senhaRemuneracao.json');
+const CAMINHO_SENHAS = path.join(process.cwd(), 'data', 'representantes.json');
 
 let isSendingRemuneracao = false;
 const remuneracaoSendQueue = [];
@@ -58,7 +58,7 @@ async function processNextRemuneracaoRequest() {
         const setor = representante.setor.toString();
         
         const diretorioPath = path.join(
-            String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2026\2 - FEVEREIRO\_GERADOR PDF\REMUNERACAO`,
+            String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2026\3 - MARÇO\_GERADOR PDF\REMUNERACAO`,
             setor
         );
 
@@ -174,7 +174,7 @@ async function enviarRemuneracao(client, message) {
         const setor = representante?.setor?.toString();
 
         const credencialValida = senhaRemuneracao.find(
-            item => item.setor?.toString() === setor && item.senha?.toString() === matricula
+            item => item.setor?.toString() === setor && item.matricula?.toString() === matricula
         );
 
         // --- CORREÇÃO AQUI ---
