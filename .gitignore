@@ -1,29 +1,50 @@
+# === DEPENDÊNCIAS E NODE ===
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# === VARIÁVEIS DE AMBIENTE ===
 .env
+
+# === LOGS DO SISTEMA E DO BOT ===
 *.log
+/logs
+
+# === SISTEMA OPERACIONAL ===
 .DS_Store
+
+# === CACHES E SESSÕES DO WHATSAPP (PUPPETEER/WWEBSJS) ===
 .local-chromium/
 .wwebjs_cache
 .wwebjs_auth
+.session
+/.session
 
-# Dados da revenda
+# === ARQUIVOS DE ESTADO DO BOT (MUDAM O TEMPO TODO) ===
+# IMPORTANTE: Não apague o etapas.json daqui!
+etapas.json
+/pedidos
+
+# === DADOS SENSÍVEIS DA REVENDA (JSONs e TXTs) ===
 contatos.json
 atendidos.json
 atendidosForaDaBase.json
 representantes.json
 senhaRemuneracao.json
-/logs
+staffs.json
 stafs.json
-/pedidos
-.env
-.session
 data/tabelaPrecos.txt
 data/solicitacoes.json
-data/hist
-src/config/mensagemPDV.js
 data/rep.json
+data/planificadorRotasRns.csv
 
+# === PASTAS DE HISTÓRICO E ARQUIVOS PESADOS ===
+data/hist
 
-# Pasta de sessão do WhatsApp
-/.session
+# === ARQUIVOS DE CONFIGURAÇÃO PRIVADOS ===
+src/config/mensagemPDV.js
 
+# === TEMPORÁRIOS DE ÁUDIO/MÍDIA (Caso o transcricaoService use) ===
+# Descomente e ajuste a linha abaixo se você salvar áudios localmente
+data/audios/
