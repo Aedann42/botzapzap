@@ -8,6 +8,8 @@ const mensagemPDV = `Olá! Caso esteja entrando em contato com a Tarumã seguem 
 
 Basta apertar no numero desejado e ir na opção "Conversar com"
 
-Caso você seja um representante, entre em contato com o APR para atualizar seu cadastro.`;
+----------------------------------------------------
+⚠️ *É UM NOVO REPRESENTANTE?*
+Verifique com o APR a palavra chave para alterar seu número a um setor e liberar seu acesso aos relatórios.`;
 
 module.exports = mensagemPDV;

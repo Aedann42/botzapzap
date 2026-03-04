@@ -292,42 +292,43 @@ async function processUserMessage(message) {
         return false;
     });
 
-    // --- Tratamento para quem NÃO está na base ---
+// --- Tratamento para quem NÃO está na base ---
+    let etapas = lerJson(ETAPAS_PATH, {}); // Carrega as etapas aqui em cima
+    const textoComando = texto.toUpperCase();
+    const PALAVRA_CHAVE_APR = 'ALTERAR'; // Ou a palavra que você escolheu
+
+    // Se NÃO é representante, verificamos se ele sabe a senha ou se já está no meio da troca
     if (!representante) {
-        // Ignora se for o operador forçando comando, senão envia msg de erro
-        if (message._operator_triggered) {
-             console.log(`🚫 [OPERADOR] Alvo não encontrado no JSON: ${numeroTelefoneLimpo}`);
-             return;
+        const iniciouAgora = textoComando === '10' || textoComando === PALAVRA_CHAVE_APR;
+        const jaEstaEmTroca = etapas[numero] && (etapas[numero].etapa?.startsWith('troca_setor'));
+
+        if (iniciouAgora || jaEstaEmTroca) {
+            // Se iniciou agora, manda a primeira mensagem e seta a etapa
+            if (iniciouAgora) {
+                await client.sendMessage(numero, '🔄 *VINCULAR NOVO SETOR*\n\nPor favor, digite apenas o *NÚMERO DO SETOR* que você vai assumir:');
+                etapas[numero] = { etapa: 'troca_setor_passo1' }; 
+                fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+                return;
+            }
+            // Se já estava no meio, processa o passo
+            await processarTroca(client, message, { nome: 'Novo Representante' });
+            return;
         }
 
-        // Carrega lista de bloqueados/atendidos fora da base
-        let foraDaBase = [];
-        if (fs.existsSync(FORA_BASE_PATH)) {
-            foraDaBase = lerJson(FORA_BASE_PATH, []);
-        }
-
-        const hoje = new Date().toISOString().split('T')[0]; // Data YYYY-MM-DD
+        // Se não for nada disso, aí sim manda o informativo de PDV e bloqueia
+        if (message._operator_triggered) return;
         
-        // Verifica se já foi atendido HOJE
+        let foraDaBase = lerJson(FORA_BASE_PATH, []);
+        const hoje = new Date().toISOString().split('T')[0];
         const jaAtendidoHoje = foraDaBase.some(at => at.id === numero && at.data === hoje);
 
         if (!jaAtendidoHoje) {
             console.log(`🚫 [FORA DA BASE] Enviando informativo para: ${numeroTelefoneLimpo}`);
-            
             await client.sendMessage(numero, MENSAGEM_PDV);
-
-            // Salva no log para não repetir hoje
-            foraDaBase.push({ 
-                id: numero, 
-                telefone: numeroTelefoneLimpo, 
-                data: hoje,
-                hora: new Date().toLocaleTimeString('pt-BR')
-            });
+            foraDaBase.push({ id: numero, telefone: numeroTelefoneLimpo, data: hoje, hora: new Date().toLocaleTimeString('pt-BR') });
             fs.writeFileSync(FORA_BASE_PATH, JSON.stringify(foraDaBase, null, 2));
-        } else {
-            console.log(`⏳ [FORA DA BASE] ${numeroTelefoneLimpo} já recebeu o informativo hoje. Ignorando.`);
         }
-        return; // ENCERRA AQUI, não mostra o menu
+        return; 
     }
 
     // --- 2. Início do Fluxo (Se for Representante Válido) ---
@@ -348,7 +349,6 @@ async function processUserMessage(message) {
 
     // --- 3. Processamento de Etapas/Menus ---
     const opcao = message.body.trim();
-    let etapas = lerJson(ETAPAS_PATH, {});
 
 if (etapas[numero] && etapas[numero].etapa) {
         const etapaAtual = etapas[numero].etapa;
@@ -484,7 +484,8 @@ if (etapas[numero] && etapas[numero].etapa) {
             await registrarUso(numeroTelefoneLimpo, 'Início Giro'), representante.setor;
             break;
         }
-        case '10': {
+        case '10': 
+        case 'alterar': {
             await client.sendMessage(message.from, '🔄 *CORRIGIR SETOR E MATRÍCULA*\n\nPor favor, digite apenas o *NÚMERO DO SETOR* que você vai assumir:');
             etapas[numero] = { etapa: 'troca_setor_passo1' }; 
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
