@@ -3,23 +3,23 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
-//const cron = require('node-cron');
 const transcricaoService = require('./src/services/transcricaoService');
 const { lerJson, registrarUso, ETAPAS_PATH, ATENDIDOS_PATH, STAFFS_PATH } = require('./src/utils/dataHandler.js');
-
 const verificarArquivoAtualizado = require('./src/services/checkDateReports');
 const { processarTroca, aprovarTroca } = require('./src/handlers/mudancaSetor');
+const chalk = require('chalk');
+const { logAcao, iniciarPainel, logMatrix } = require('./src/utils/logger');
 
 // 🚨 CAMINHO FORÇADO PARA O JSON (PASTA DATA)
 const CAMINHO_JSON_REAL = path.join(__dirname, 'data', 'representantes.json');
+const LOG_USO_PATH = path.join(__dirname, 'logs', 'log_uso.json');
 const FORA_BASE_PATH = path.join(__dirname, 'data', 'atendidosForaDaBase.json');
 
 // Caminhos de CHECAGEM (Usados apenas para saber se o processo do servidor terminou)
 const CAMINHO_CHECK_PDF = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\3 - MARÇO\\_GERADOR PDF\\ACOMPS\\410\\410_Volume.pdf';
 const CAMINHO_CHECK_IMAGEM = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\3 - MARÇO\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_1.jpg';
-
 const MENU_TEXT = require('./src/config/menuOptions');
-const MENSAGEM_PDV = require('./src/config/mensagemPDV'); // <--- NOVA IMPORTAÇÃO
+const MENSAGEM_PDV = require('./src/config/mensagemPDV'); 
 
 // Handlers
 const enviarRelatoriosImagem = require('./src/handlers/enviarRelatoriosImagem');
@@ -59,7 +59,8 @@ const client = new Client({
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-zygote',
-            '--disable-gpu' 
+            '--disable-gpu',
+            '--js-flags="--max-old-space-size=4096"'
         ]
     }
 });
@@ -242,7 +243,6 @@ client.on('message_create', async (message) => {
     }
 });
 
-
 // ============================================================================================
 // === PROCESSADOR DE MENSAGENS ===
 // ============================================================================================
@@ -252,7 +252,7 @@ async function processUserMessage(message) {
     const numero = message.from; 
     const texto = message.body.trim(); // Pegando o texto da mensagem
 
-    // 🚨 GATILHO DE ADMINISTRAÇÃO (YURI)
+    // 🚨 GATILHO DE ADMINISTRAÇÃO
     if (texto.toLowerCase().startsWith('/aprovar')) {
         const telefoneAlvo = texto.split(' ')[1];
         if (!telefoneAlvo) return await client.sendMessage(message.from, "❌ Use: /aprovar numerodotelefone");
@@ -331,20 +331,37 @@ async function processUserMessage(message) {
         return; 
     }
 
-    // --- 2. Início do Fluxo (Se for Representante Válido) ---
-    const idPermanente = message.from; 
+// --- 2. Início do Fluxo (Se for Representante Válido) ---
+    // Pega a data de hoje no formato do seu log (DD/MM/YYYY)
+    const dataObj = new Date();
+    const dia = String(dataObj.getDate()).padStart(2, '0');
+    const mes = String(dataObj.getMonth() + 1).padStart(2, '0');
+    const dataDeHoje = `${dia}/${mes}/${dataObj.getFullYear()}`;
 
-    if (!atendidos.includes(idPermanente) && !staffs.some(staff => String(staff.telefone) === numeroTelefoneLimpo)) {
-        console.log(`✅ [NOVO] Atendimento para: ${representante.nome} (${representante.codigo})`);
+    // Lemos o log de uso direto do arquivo
+    const historicoDeUso = lerJson(LOG_USO_PATH, []);
+
+    // Verifica se esse telefone já tem ALGUMA linha de registro gravada com a data de hoje
+    const jaFoiAtendidoHoje = historicoDeUso.some(log => log.telefone === numeroTelefoneLimpo && log.data === dataDeHoje);
+
+    // Se ele NÃO foi atendido hoje e NÃO for do staff
+    if (!jaFoiAtendidoHoje && !staffs.some(staff => String(staff.telefone) === numeroTelefoneLimpo)) {
+        
+        // Log bonitão no terminal
+        logAcao('SISTEMA', `Primeiro atendimento do dia para: ${repNome}`);
         
         const hora = new Date().getHours();
         const saudacaoBase = hora <= 12 ? 'Bom dia' : (hora <= 18 ? 'Boa tarde' : 'Boa noite');
         
         await client.sendMessage(message.from, `${saudacaoBase}! Sou o assistente virtual.\n${MENU_TEXT}`);
 
-        atendidos.push(idPermanente);
-        fs.writeFileSync(ATENDIDOS_PATH, JSON.stringify(atendidos, null, 2));
-        return;
+        // O PULO DO GATO ESTÁ AQUI 👇
+        // Em vez de salvar num JSON de "atendidos", a gente simplesmente registra a ação "Menu".
+        // Como o registrarUso salva no log_uso.json, na próxima vez que ele mandar mensagem, 
+        // o "jaFoiAtendidoHoje" lá em cima vai dar Verdadeiro!
+        await registrarUso(numeroTelefoneLimpo, 'Menu', representante.setor);
+        
+        return; // Para a execução aqui para ele não tentar abrir o switch
     }
 
     // --- 3. Processamento de Etapas/Menus ---
@@ -383,17 +400,9 @@ if (etapas[numero] && etapas[numero].etapa) {
                 return;
             }
             if (etapaAtual === 'wait') {
-                // ATENÇÃO: Como você comentou o importe do pedidoHandler lá em cima, 
-                // comentei a chamada aqui também para não dar erro se cair nessa etapa.
-                // const resultado = await pedidoHandler.processarMensagem(client, message);
-                // if (resultado === 'FINALIZAR') {
-                //    delete etapas[numero];
-                //    fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-                // }
                 return;
             }
             
-            // 👇 BLOCO NOVO (AGORA TOTALMENTE SEPARADO DO WAIT)
             if (etapaAtual === 'clientes_nao_compradores') {
                 await clientesNaoCompradores(client, message, representante);
                 await registrarUso(numeroTelefoneLimpo, 'Consulta Nao Compradores', representante.setor);
@@ -415,14 +424,15 @@ if (etapas[numero] && etapas[numero].etapa) {
         }
     }
 
-    const MSG_INDISPONIVEL = '⚠️ Relatórios ainda não gerados. Avisarei quando estiverem prontos! 🤖';
+ const MSG_INDISPONIVEL = '⚠️ Relatórios ainda não gerados. Avisarei quando estiverem prontos! 🤖';
 
     switch (opcao.toLowerCase()) {
         case '1': { 
             const pronto = await verificarArquivoAtualizado(CAMINHO_CHECK_PDF);
             if (pronto) {
-                // 👇 GARANTIA QUE VAI O ARQUIVO CERTO
-                console.log(`[MANUAL] Enviando PDF para: ${representante.nome} (Cod: ${representante.codigo})`);
+                // Chama o logger que faz tudo: soma o stats, pinta de verde e atualiza o painel
+                logAcao('PDF', `Enviando PDF para: ${representante.nome} (Cod: ${representante.setor})`);
+                
                 await enviarRelatoriosPdf(client, message, representante);
                 await registrarUso(numeroTelefoneLimpo, 'Relatório PDF', representante.setor);
                 if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
@@ -436,63 +446,78 @@ if (etapas[numero] && etapas[numero].etapa) {
         case '2': {
             const pronto = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
             if (pronto) {
-                console.log(`[MANUAL] Enviando Imagem para: ${representante.nome} (Cod: ${representante.codigo})`);
+                logAcao('IMAGEM', `Enviando Imagem para:${representante.setor}`);
+                
                 await enviarRelatoriosImagem(client, message, representante);
                 await registrarUso(numeroTelefoneLimpo, 'Relatório Imagem', representante.setor);
                 if (etapas[numero]) delete etapas[numero].tentativasInvalidas;
                 delete usuariosAguardandoRelatorio[numero];
             } else {
                 await client.sendMessage(message.from, MSG_INDISPONIVEL);
-                usuariosAguardandoRelatorio[numero]= 'imagem';
+                usuariosAguardandoRelatorio[numero] = 'imagem';
             }
             break;
         }
-        case '3':
+        case '3': {
+            logAcao('DUVIDA', `RN:${representante.nome} COM DÚVIDAS`);
             await client.sendMessage(message.from, 'Envie mensagem para o Yuri APR 3299982517 com nb e print do problema');
             await registrarUso(numeroTelefoneLimpo, 'Suporte Manual', representante.setor);
             break;
-        case '4':
+        }
+        case '4': {
+            logAcao('REMUNERACAO',`Consulta Remuneração solicitada por ${representante.setor}`);
             await enviarRemuneracao(client, message);
             await registrarUso(numeroTelefoneLimpo, 'Remuneração', representante.setor);
             break;
-        case '5':
+        }
+        case '5': {
+            logAcao('PDV', `Análise PDV: Aguardando código. Setor ${representante.setor}`);
             await client.sendMessage(message.from, 'Envie o código do PDV (apenas números):');
             etapas[numero] = { etapa: 'pdv' };
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             await registrarUso(numeroTelefoneLimpo, 'Início PDV', representante.setor);
             break;
-        case '6':
+        }
+        case '6': {
+            logAcao('TELEFONES', `Abriu a lista de contatos. Setor ${representante.setor}`);
             await enviarListaContatos(client, message);
             await registrarUso(numeroTelefoneLimpo, 'Lista Contatos', representante.setor);
             break;
+        }
         case '7': {
+            logAcao('COLETA', `Coleta TTC: Aguardando código. Setor ${representante.setor}`);
             await client.sendMessage(message.from, 'Envie o código do PDV para Coleta TTC:');
             etapas[numero] = { etapa: 'coleta_ttc' };
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-            await registrarUso(numeroTelefoneLimpo, 'Início TTC',representante.setor);
+            await registrarUso(numeroTelefoneLimpo, 'Início TTC', representante.setor);
             break;
         }
         case '8': {
+            logAcao('BONIFICACAO', `Consulta CT e Bonificação. Setor ${representante.setor}`);
             await enviarCts(client, message, representante); 
-            await registrarUso(numeroTelefoneLimpo, 'Consulta CT',representante.setor);
+            await registrarUso(numeroTelefoneLimpo, 'Consulta CT', representante.setor);
             break;
         }
         case '9': {
+            logAcao('GIRO', `Consulta Giro: Aguardando código. Setor ${representante.setor}`);
             await client.sendMessage(message.from, 'Envie o código do PDV para Giro 🤑:');
             etapas[numero] = { etapa: 'giro_equipamentos' }; 
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-            await registrarUso(numeroTelefoneLimpo, 'Início Giro'), representante.setor;
+            // Sintaxe arrumada aqui 👇
+            await registrarUso(numeroTelefoneLimpo, 'Início Giro', representante.setor);
             break;
         }
         case '10': 
         case 'alterar': {
+            logAcao('ALTERAR_SETOR', `Arrumando setor (Início da troca). Setor ${representante.setor}`);
             await client.sendMessage(message.from, '🔄 *CORRIGIR SETOR E MATRÍCULA*\n\nPor favor, digite apenas o *NÚMERO DO SETOR* que você vai assumir:');
             etapas[numero] = { etapa: 'troca_setor_passo1' }; 
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             await registrarUso(numeroTelefoneLimpo, 'Início Troca Setor', representante.setor);
             break;
         }
-case '11': {
+        case '11': {
+            logAcao('NAO_COMPRADORES', `Olhando não compradores. Setor ${representante.setor}`);
             const menuIndicadores = `📉 *CLIENTES NÃO COMPRADORES*\n\n` +
                                     `Qual indicador você deseja analisar? (Digite apenas o número)\n\n` +
                                     `*1* - AMBEV\n` +
@@ -514,7 +539,7 @@ case '11': {
             await registrarUso(numeroTelefoneLimpo, 'Início Clientes Nao Compradores', representante.setor);
             break;
         }
-        case 'menu':
+        case 'menu': {
             const hora = new Date().getHours();
             const saudacao = hora < 12 ? 'Bom dia' : (hora < 18 ? 'Boa tarde' : 'Boa noite');
             await client.sendMessage(message.from, `${saudacao}!\n${MENU_TEXT}`);
@@ -523,10 +548,13 @@ case '11': {
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             }
             await registrarUso(numeroTelefoneLimpo, 'Menu', representante.setor);
+            
+            // Um pequeno log Matrix opcional para você ver quando pedem o menu
+            logMatrix(`[SISTEMA] Menu inicial solicitado por: ${representante.nome}`);
             break;
+        }
     }
 }
-
 client.on('message', async message => {
     // LOG DE MONITORAMENTO
     const contactName = message._data.notifyName || message.from.split('@')[0];
@@ -550,6 +578,7 @@ client.on('message', async message => {
     // Processa mensagens privadas normalmente
     await processUserMessage(message);
 });
+iniciarPainel();
 client.initialize();
 
 client.on('disconnected', reason => { console.error('⚠️ Desconectado:', reason); process.exit(1); });
