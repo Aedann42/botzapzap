@@ -58,7 +58,7 @@ const logAcao = (tipo, mensagem) => {
         case 'PDF': console.log(chalk.green.bold(`[1 - PDF] ${mensagem}`)); break;
         case 'IMAGEM': console.log(chalk.greenBright(`[2 - IMAGEM] ${mensagem}`)); break;
         case 'DUVIDA': console.log(chalk.yellow(`[3 - SUPORTE] ${mensagem}`)); break;
-        case 'REMUNERACAO': console.log(chalk.yellow.bold(`[4 - FINANCEIRO] ${mensagem}`)); break;
+        case 'REMUNERACAO': console.log(chalk.yellow.bold(`[4 - REMUNERAÇÃO] ${mensagem}`)); break;
         case 'PDV': console.log(chalk.red.bold(`[5 - PDV] ${mensagem}`)); break;
         case 'TELEFONES': console.log(chalk.red(`[6 - CONTATOS] ${mensagem}`)); break;
         case 'COLETA': console.log(chalk.magenta.bold(`[7 - TTC] ${mensagem}`)); break;

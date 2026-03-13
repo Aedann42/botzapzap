@@ -1,136 +1,105 @@
-// src/handlers/enviarListaContatos.js (VERSÃO CHIQUE: LISTA INTERATIVA + TEXTO)
-
 const fs = require('fs');
 const path = require('path');
-// Importamos a classe List para fazer o "popup chique"
-const { List } = require('whatsapp-web.js'); 
 
-// 🚨 CAMINHOS SEGUROS
+// 🚨 IMPORTAÇÕES DE CAMINHOS SEGUROS
 const ETAPAS_PATH = path.join(process.cwd(), 'data', 'etapas.json');
 const CONTATOS_PATH = path.join(process.cwd(), 'data', 'contatos.json');
 
-// --- FUNÇÕES AUXILIARES ---
-function carregarEtapas() {
+/**
+ * Função para carregar e salvar etapas de forma isolada para evitar conflitos
+ */
+function gerenciarEtapas(numero, novaEtapa = null) {
     try {
-        if (fs.existsSync(ETAPAS_PATH)) return JSON.parse(fs.readFileSync(ETAPAS_PATH, 'utf8'));
-    } catch (e) { console.error('Erro ao ler etapas:', e); }
-    return {};
+        let etapas = {};
+        if (fs.existsSync(ETAPAS_PATH)) {
+            etapas = JSON.parse(fs.readFileSync(ETAPAS_PATH, 'utf8'));
+        }
+        
+        if (novaEtapa === 'DELETE') {
+            delete etapas[numero];
+        } else if (novaEtapa) {
+            etapas[numero] = { etapa: novaEtapa };
+        } else {
+            return etapas[numero]?.etapa;
+        }
+        
+        fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+    } catch (e) {
+        console.error('[Contatos] Erro ao gerenciar etapas:', e);
+    }
 }
 
-function salvarEtapas(etapas) {
-    try { fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2)); } catch (e) {}
-}
-
-function carregarContatos() {
-    try {
-        if (fs.existsSync(CONTATOS_PATH)) return JSON.parse(fs.readFileSync(CONTATOS_PATH, 'utf8'));
-    } catch (e) { console.error('Erro ao ler contatos:', e); }
-    return [];
-}
-
-// --- FUNÇÃO PRINCIPAL ---
 async function enviarListaContatos(client, message) {
     const numero = message.from;
-    const textoOriginal = message.body.trim(); // Pode vir "1" ou "Logística" (se clicar no botão)
+    const textoOriginal = message.body.trim();
     
-    let etapas = carregarEtapas();
-    const contatos = carregarContatos();
+    // 1. CARREGAR CONTATOS
+    let contatos = [];
+    try {
+        if (fs.existsSync(CONTATOS_PATH)) {
+            contatos = JSON.parse(fs.readFileSync(CONTATOS_PATH, 'utf8'));
+        }
+    } catch (e) { console.error('Erro ao ler contatos.json'); }
 
     if (!contatos || contatos.length === 0) {
-        await client.sendMessage(numero, '❌ A lista de contatos está vazia.');
-        if (etapas[numero]) { delete etapas[numero]; salvarEtapas(etapas); }
+        await client.sendMessage(numero, '❌ A lista de contatos está vazia no servidor.');
         return;
     }
 
+    const etapaAtual = gerenciarEtapas(numero);
+
     // =================================================================================
-    // ETAPA 1: ENVIAR O MENU (TENTA LISTA INTERATIVA, SE FALHAR, VAI TEXTO)
+    // ETAPA 1: ENVIAR O MENU DE OPÇÕES (Texto Numerado)
     // =================================================================================
-    if (!etapas[numero] || etapas[numero].etapa !== 'aguardandoEscolha') {
+    if (etapaAtual !== 'aguardandoEscolha') {
         
-        etapas[numero] = { etapa: 'aguardandoEscolha' };
-        salvarEtapas(etapas);
+        gerenciarEtapas(numero, 'aguardandoEscolha');
 
-        // --- TENTATIVA 1: MODO CHIQUE (LISTA) ---
-        try {
-            console.log('[enviarListaContatos] Tentando enviar Lista Interativa...');
-            
-            // Monta as linhas da lista
-            const linhasLista = contatos.map((c, index) => ({
-                id: (index + 1).toString(), // ID será "1", "2"...
-                title: c.setor.substring(0, 24), // Título tem limite de caracteres
-                description: c.nome.substring(0, 72) // Descrição (Nome da pessoa)
-            }));
-
-            const listaInterativa = new List(
-                'Selecione o setor desejado para receber o contato:', // Corpo
-                'Abrir Contatos', // Texto do Botão
-                [{ title: 'Departamentos', rows: linhasLista }], // Seções
-                'Lista de Contatos', // Título
-                'Tarumã Distribuidora' // Rodapé
-            );
-
-            await client.sendMessage(numero, listaInterativa);
-            return; // Se deu certo, para aqui.
-
-        } catch (erroLista) {
-            console.error('[Contatos] Erro ao enviar Lista Interativa (provavelmente não suportado). Usando texto.', erroLista.message);
-            // Se der erro (comum no Web.js atualmente), o código continua para o texto abaixo
-        }
-
-        // --- TENTATIVA 2: MODO TEXTO (FALLBACK) ---
-        let resposta = '📋 *LISTA DE CONTATOS*\nDigite o número da opção:\n\n';
+        let resposta = '📋 *LISTA DE CONTATOS TARUMÃ*\n\nDigite o número do setor:\n\n';
         contatos.forEach((contato, index) => {
             resposta += `*${index + 1}* - ${contato.setor} (${contato.nome})\n`;
         });
-        resposta += '\n_Digite o número da opção desejada._';
+        resposta += '\n_Digite apenas o número desejado._';
 
         await client.sendMessage(numero, resposta.trim());
         return;
     }
 
     // =================================================================================
-    // ETAPA 2: PROCESSAR A ESCOLHA (INTELIGENTE)
+    // ETAPA 2: PROCESSAR A ESCOLHA DO USUÁRIO
     // =================================================================================
-    if (etapas[numero].etapa === 'aguardandoEscolha') {
+    if (etapaAtual === 'aguardandoEscolha') {
         
-        let contatoEscolhido = null;
+        // Tenta converter o texto em número
+        const indice = parseInt(textoOriginal.replace(/\D/g, '')) - 1;
+        const contatoEscolhido = contatos[indice];
 
-        // Tenta interpretar como NÚMERO (se digitou "1")
-        const possivelIndice = parseInt(textoOriginal.replace(/\D/g, ''));
-        
-        if (!isNaN(possivelIndice) && possivelIndice > 0 && possivelIndice <= contatos.length) {
-            contatoEscolhido = contatos[possivelIndice - 1];
-        } 
-        // Se não for número, tenta achar pelo NOME do setor ou pessoa (se clicou no botão)
-        else {
-            const textoBusca = textoOriginal.toLowerCase();
-            contatoEscolhido = contatos.find(c => 
-                c.setor.toLowerCase().includes(textoBusca) || 
-                c.nome.toLowerCase().includes(textoBusca)
-            );
-        }
-
-        // Validação Final
         if (!contatoEscolhido) {
-            await client.sendMessage(numero, '❌ Não entendi sua escolha. Por favor, digite apenas o *número* da lista.');
-            return; // Não deleta a etapa, deixa tentar de novo
+            // Se o cara digitar "menu", a gente cancela e volta
+            if (textoOriginal.toLowerCase() === 'menu') {
+                gerenciarEtapas(numero, 'DELETE');
+                return; // O index.js vai tratar o "menu" e mandar o menu principal
+            }
+            await client.sendMessage(numero, '❌ Opção inválida. Digite um *número* da lista ou "menu" para cancelar.');
+            return;
         }
 
-        // --- SUCESSO: ENVIA O LINK ---
+        // --- SUCESSO: GERA O LINK E ENVIA ---
         const apenasNumeros = contatoEscolhido.telefone.replace(/\D/g, '');
-        const linkDireto = `https://wa.me/${apenasNumeros}`;
+        // Se o número não tiver DDI (55), a gente coloca
+        const ddi = apenasNumeros.startsWith('55') ? '' : '55';
+        const linkDireto = `https://wa.me/${ddi}${apenasNumeros}`;
 
-        const msg = `📞 *Contato Selecionado:*\n\n` +
-                    `📍 *Setor:* ${contatoEscolhido.setor}\n` +
-                    `👤 *Nome:* ${contatoEscolhido.nome}\n` +
-                    `📱 *Telefone:* ${contatoEscolhido.telefone}\n\n` +
-                    `🔗 *Clique para conversar:* ${linkDireto}`;
+        const msgFinal = `📞 *CONTATO SELECIONADO*\n\n` +
+                         `📍 *Setor:* ${contatoEscolhido.setor}\n` +
+                         `👤 *Nome:* ${contatoEscolhido.nome}\n` +
+                         `📱 *Tel:* ${contatoEscolhido.telefone}\n\n` +
+                         `🔗 *Conversar agora:* ${linkDireto}`;
 
-        await client.sendMessage(numero, msg);
-        //await client.sendSeen(numero);
+        await client.sendMessage(numero, msgFinal);
         
-        delete etapas[numero];
-        salvarEtapas(etapas);
+        // Limpa a etapa para o bot voltar ao menu normal
+        gerenciarEtapas(numero, 'DELETE');
     }
 }
 
