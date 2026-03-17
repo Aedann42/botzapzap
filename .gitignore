@@ -41,8 +41,8 @@ data/planificadorRotasRns.csv
 
 # === PASTAS DE HISTÓRICO E ARQUIVOS PESADOS ===
 data/hist
-data/hist/Base_PDVs_Atualizada.csv
-data/hist/pedidosDataDeEntrega.csv
+data/Base_PDVs_Atualizada.csv
+data/pedidosDataDeEntrega.csv
 
 # === ARQUIVOS DE CONFIGURAÇÃO PRIVADOS ===
 src/config/mensagemPDV.js
