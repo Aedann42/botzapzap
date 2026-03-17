@@ -13,11 +13,11 @@ const MENU_TEXT = `
 9️⃣ - Consultar Giro de Equipamentos do PDV 🔄🏪 
 🔟 - Corrigir Setor e Matrícula 🔄✏️
 1️⃣1️⃣ - Consultar Clientes Não Compradores 📉🚫
+1️⃣2️⃣ - Analisar adição de data de entrega 🚚📍
 
 ⚠️ *Aviso (Opção 11):* No começo do mês, pelo alto número de não compradores, recomendamos *não* usar a função 11 para evitar travamentos ou mensagens gigantescas.
 
 Digite *MENU* a qualquer momento para receber novamente essa mensagem
-
 `;
 
 module.exports = MENU_TEXT;

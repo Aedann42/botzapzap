@@ -198,7 +198,7 @@ module.exports = async (client, message, representante) => {
         msg += `-------------------------------------------\n\n`;
 
         clientesZerados.forEach((c, index) => {
-            msg += `🏪 ${index + 1}. ${c.razaoSocial}\n`;
+            msg += `🏪 *${index + 1}. ${c.razaoSocial}*\n`;
             msg += `🗝️ Chave: ${c.chave}  |  📅 Visita: ${c.visita}\n\n`;
             
             if (c.historicoMesPassado.length === 0) {
