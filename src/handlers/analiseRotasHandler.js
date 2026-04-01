@@ -19,13 +19,20 @@ function obterAbaMesPassado() {
     return meses[mesPassado];
 }
 
-// --- FUNÇÕES DE LEITURA ---
+// --- FUNÇÕES DE LEITURA BLINDADA ---
 function lerBaseCSV() {
     try {
         const conteudo = fs.readFileSync(BASE_PDVS_PATH, 'utf-8').replace(/^\uFEFF/, '');
         const linhas = conteudo.split(/\r?\n/).filter(l => l.trim() !== '');
         const separador = linhas[0].includes(';') ? ';' : ',';
-        const headers = linhas[0].split(separador).map(h => h.trim());
+        
+        // 🔥 A MÁGICA AQUI: Forçamos o nosso próprio cabeçalho perfeito.
+        // O código ignora os erros de codificação (Municpio) e as colunas vazias (;;) do arquivo original.
+        const headers = [
+            'Chave', 'UNB', 'Cod PDV', 'CPF/CNPJ', 'FANTASIA', 'ENDERECO', 'BAIRRO', 'Municipio', 
+            'Freq.Visita', 'SETOR', 'DIA', 'KM CASA ROTA', 'CASA REVENDA', 'KM TT NOVO', 
+            'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'TT', 'Latitude', 'Longitude'
+        ];
 
         return linhas.slice(1).map(linha => {
             const valores = linha.split(separador);
@@ -93,10 +100,9 @@ async function obterEstatisticasPdv(nbBusca) {
     if (!pdvBase) return { erro: `❌ O NB *${nbBusca}* não foi encontrado na base atual.` };
 
     const bairro = pdvBase['BAIRRO'] || 'Desconhecido';
-    const municipio = pdvBase['Município'] || 'Desconhecido';
+    const municipio = pdvBase['Municipio'] || 'Desconhecido'; // Atualizado sem acento
     const fantasia = pdvBase['FANTASIA'] || 'Não Cadastrado';
 
-    // Identifica qual é o prefixo da filial (ex: '1046853_' ou '296708_')
     const prefixoFilial = nbBusca.split('_')[0] + '_';
 
     const diasDaSemana = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
@@ -105,10 +111,9 @@ async function obterEstatisticasPdv(nbBusca) {
 
     const historico = await obterFaturamentoMesPassado(nbBusca);
 
-    // Filtra vizinhos no mesmo Bairro, Município E da mesma FILIAL (Prefixo)
     const vizinhos = pdvData.filter(p => 
         p['BAIRRO'] === bairro && 
-        p['Município'] === municipio &&
+        p['Municipio'] === municipio && // Atualizado sem acento
         p['Chave'].startsWith(prefixoFilial)
     );
 
@@ -131,12 +136,12 @@ async function processarAnaliseRota(nbBusca, diaEscolhido) {
     if (!pdvData) return { erro: "❌ *Erro de Sistema:* A base de clientes não foi encontrada." };
     
     let pdvBase = pdvData.find(p => p['Chave'] === nbBusca);
-    if (!pdvBase || !pdvBase['Check In - Latitude']) return { erro: `❌ O NB *${nbBusca}* não foi encontrado ou não possui coordenadas.` };
+    // Alterado para 'Latitude'
+    if (!pdvBase || !pdvBase['Latitude']) return { erro: `❌ O NB *${nbBusca}* não foi encontrado ou não possui coordenadas.` };
 
-    const baseLat = parseFloat(pdvBase['Check In - Latitude'].replace(',', '.'));
-    const baseLng = parseFloat(pdvBase['Check In - Longitude'].replace(',', '.'));
+    const baseLat = parseFloat(pdvBase['Latitude'].replace(',', '.'));
+    const baseLng = parseFloat(pdvBase['Longitude'].replace(',', '.'));
 
-    // Identifica qual é o prefixo da filial
     const prefixoFilial = nbBusca.split('_')[0] + '_';
 
     const diasDaSemana = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
@@ -145,18 +150,17 @@ async function processarAnaliseRota(nbBusca, diaEscolhido) {
 
     const historico = await obterFaturamentoMesPassado(nbBusca);
 
-    // Filtra clientes com entrega no dia E obrigatoriamente da mesma FILIAL
     let pdvsDoDia = pdvData.filter(p => 
         p[diaEscolhido] === '1' && 
         p['Chave'] !== nbBusca && 
-        p['Check In - Latitude'] &&
+        p['Latitude'] && // Atualizado
         p['Chave'].startsWith(prefixoFilial)
     );
     
     if (pdvsDoDia.length === 0) return { erro: `❌ Nenhum outro PDV da mesma operação possui entrega marcada para ${diaEscolhido} na base de dados.` };
 
     pdvsDoDia.forEach(p => {
-        p.distReta = calcHaversine(baseLat, baseLng, parseFloat(p['Check In - Latitude'].replace(',', '.')), parseFloat(p['Check In - Longitude'].replace(',', '.')));
+        p.distReta = calcHaversine(baseLat, baseLng, parseFloat(p['Latitude'].replace(',', '.')), parseFloat(p['Longitude'].replace(',', '.')));
     });
 
     pdvsDoDia.sort((a, b) => a.distReta - b.distReta);
@@ -166,8 +170,8 @@ async function processarAnaliseRota(nbBusca, diaEscolhido) {
     let menorDist = Infinity;
 
     for (let c of top5) {
-        const cLat = parseFloat(c['Check In - Latitude'].replace(',', '.'));
-        const cLng = parseFloat(c['Check In - Longitude'].replace(',', '.'));
+        const cLat = parseFloat(c['Latitude'].replace(',', '.'));
+        const cLng = parseFloat(c['Longitude'].replace(',', '.'));
         c.distRuas = c.distReta; 
         
         try {
@@ -186,9 +190,13 @@ async function processarAnaliseRota(nbBusca, diaEscolhido) {
 
     if (!vencedor) return { erro: "❌ Não foi possível traçar uma rota viária." };
 
-    const vLat = parseFloat(vencedor['Check In - Latitude'].replace(',', '.'));
-    const vLng = parseFloat(vencedor['Check In - Longitude'].replace(',', '.'));
+    const vLat = parseFloat(vencedor['Latitude'].replace(',', '.'));
+    const vLng = parseFloat(vencedor['Longitude'].replace(',', '.'));
     vencedor.endereco = await obterEndereco(vLat, vLng);
+
+    // Criamos variáveis virtuais apenas para garantir a compatibilidade com o menuHandler atual
+    vencedor['Check In - Latitude'] = vencedor['Latitude'];
+    vencedor['Check In - Longitude'] = vencedor['Longitude'];
 
     return { 
         sucesso: true, 
