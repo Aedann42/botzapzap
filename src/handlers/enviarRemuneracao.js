@@ -58,7 +58,7 @@ async function processNextRemuneracaoRequest() {
         const setor = representante.setor.toString();
         
         const diretorioPath = path.join(
-            String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2026\3 - MARÇO\_GERADOR PDF\REMUNERACAO`,
+            String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2026\4 - ABRIL\_GERADOR PDF\REMUNERACAO`,
             setor
         );
 

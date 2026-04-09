@@ -5,7 +5,7 @@ const { MessageMedia } = require('whatsapp-web.js');
 
 async function enviarRelatoriosPdf(client, message, representante) {
     const numero = message.from;
-    const BASE_PATH = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2026\3 - MARÇO\_GERADOR PDF\ACOMPS`;
+    const BASE_PATH = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2026\4 - ABRIL\_GERADOR PDF\ACOMPS`;
     
     try {
         if (!representante?.setor) return;

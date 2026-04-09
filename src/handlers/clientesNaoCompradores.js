@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 
 // --- CONFIGURAÇÃO DE CAMINHOS ---
-const PASTA_PERFORMANCE = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\3 - MARÇO\\_GERADOR PDF';
+const PASTA_PERFORMANCE = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\4 - ABRIL\\_GERADOR PDF';
 const ARQUIVO_PERFORMANCE = path.join(PASTA_PERFORMANCE, 'Acomp Performance.xlsx');
 const PASTA_BANCO_DADOS = 'C:\\botzapzap\\botzapzap\\data\\hist';
 
