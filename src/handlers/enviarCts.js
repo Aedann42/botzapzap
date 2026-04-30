@@ -79,7 +79,7 @@ module.exports = async (client, message, representante) => {
     // 2. Definição do Caminho do Arquivo
     const arquivo = path.join(
         '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\4 - ABRIL\\',
-        '_CT 2025 - Controle Bonificacao.xlsx'
+        '_CT - Controle Bonificacao.xlsx'
     );
 
     await client.sendMessage(
@@ -116,18 +116,18 @@ module.exports = async (client, message, representante) => {
                 aba.eachRow((row, rowNumber) => {
                     if (rowNumber === 1) return;
 
-                    const rnPlanilha = getCellValueAsString(row.getCell(2)); // Coluna B = Setor/RN
+                    const rnPlanilha = getCellValueAsString(row.getCell(3)); // Coluna B = Setor/RN
 
                     // Comparação flexível (string e trim)
                     if (String(rnPlanilha).trim() === String(setorUsuario).trim()) {
                         const contratoInfo = {
-                            codPdv: getCellValueAsString(row.getCell(3)),
-                            Cliente: getCellValueAsString(row.getCell(4)),
-                            Marca: getCellValueAsString(row.getCell(5)),
-                            VrTotalContrato: getCellValueAsNumber(row.getCell(6)),
-                            BoniProdutos: getCellValueAsNumber(row.getCell(7)),
-                            BonifPago: getCellValueAsNumber(row.getCell(8)),
-                            Saldos: getCellValueAsNumber(row.getCell(9))
+                            codPdv: getCellValueAsString(row.getCell(1)),
+                            Cliente: getCellValueAsString(row.getCell(5)),
+                            Marca: getCellValueAsString(row.getCell(7)),
+                            VrTotalContrato: getCellValueAsNumber(row.getCell(8)),
+                            BoniProdutos: getCellValueAsNumber(row.getCell(11)),
+                            BonifPago: getCellValueAsNumber(row.getCell(12)),
+                            Saldos: getCellValueAsNumber(row.getCell(13))
                         };
                         contratosEncontrados.push(contratoInfo);
                     }
@@ -146,7 +146,7 @@ module.exports = async (client, message, representante) => {
                             `🏪 *PDV:* ${ct.codPdv} - ${ct.Cliente}\n` +
                             `🔖 *Marca:* ${ct.Marca}\n` +
                             `💰 *Total Contrato:* ${formatarMoeda(ct.VrTotalContrato)}\n` +
-                            `📦 *Meta Produtos:* ${formatarMoeda(produtos)}\n` +
+                            `📦 *Bonificação:* ${formatarMoeda(produtos)}\n` +
                             `💸 *Pago:* ${formatarMoeda(pago)}\n` +
                             `📊 *Saldo:* ${formatarMoeda(ct.Saldos)}\n` +
                             `📈 *Progresso:* ${percentualPago}% ${barraProgresso}`

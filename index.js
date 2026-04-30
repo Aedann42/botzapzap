@@ -30,7 +30,7 @@ const usuariosAguardandoRelatorio = {};
 const client = new Client({
     authStrategy: new LocalAuth({ clientId: 'sessao-principal-v1' }),
     puppeteer: {
-        headless: true,
+        headless: false,
         executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
         args: [
             '--no-sandbox',

@@ -73,11 +73,10 @@ async function handleMenu(client, message, representante, numeroTelefoneLimpo, M
             return await processarTroca(client, message, representante);
         }
 
-        if (etapaAtual === 'clientes_nao_compradores') {
+        // 🔥 CORREÇÃO: Repassa para o handler sem apagar a etapa. O próprio handler gerencia isso.
+        if (etapaAtual === 'nc_indicador' || etapaAtual === 'nc_dia') {
             const finalizar = await simularHumano(message);
             await clientesNaoCompradores(client, message, representante);
-            delete etapas[numero];
-            fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             await finalizar();
             return;
         }
@@ -341,11 +340,9 @@ async function handleMenu(client, message, representante, numeroTelefoneLimpo, M
             break;
         }
         case '11': {
+            // 🔥 CORREÇÃO: Chama direto o handler, ele mesmo se encarrega de iniciar a etapa 'nc_indicador'
             const finalizar = await simularHumano(message);
-            const menuInd = `📉 *CLIENTES NÃO COMPRADORES*\n\nEscolha o indicador (1-11):\n\n*1* - AMBEV\n*2* - MKTP\n*3* - CERV\n*4* - MATCH\n*5* - CERV RGB\n*6* - CERV 1/1\n*7* - CERV 300\n*8* - MEGABRANDS\n*9* - NAB\n*10* - RED BULL\n*11* - R$ MKTP`;
-            await client.sendMessage(numero, menuInd);
-            etapas[numero] = { etapa: 'clientes_nao_compradores' };
-            fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+            await clientesNaoCompradores(client, message, representante);
             await finalizar();
             break;
         }
