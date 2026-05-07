@@ -22,15 +22,15 @@ const FORA_BASE_PATH = path.join(__dirname, 'data', 'atendidosForaDaBase.json');
 const MENU_TEXT = require('./src/config/menuOptions');
 const MENSAGEM_PDV = require('./src/config/mensagemPDV');
 const CAMINHOS_SERVER = {
-    pdf: '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\4 - ABRIL\\_GERADOR PDF\\ACOMPS\\410\\410_Volume.pdf',
-    imagem: '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\4 - ABRIL\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_1.jpg'
+    pdf: '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\5 - MAIO\\_GERADOR PDF\\ACOMPS\\410\\410_Volume.pdf',
+    imagem: '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\5 - MAIO\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_1.jpg'
 };
 
 const usuariosAguardandoRelatorio = {};
 const client = new Client({
     authStrategy: new LocalAuth({ clientId: 'sessao-principal-v1' }),
     puppeteer: {
-        headless: false,
+        headless: true,
         executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
         args: [
             '--no-sandbox',

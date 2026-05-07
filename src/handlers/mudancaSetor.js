@@ -65,7 +65,7 @@ async function processarTroca(client, message, representante) {
 
         await client.sendMessage(numero, `✅ Solicitação enviada!\n\nPedido para o setor *${novoSetor}* com a matrícula *${novaMatricula}* foi encaminhado para aprovação.\nAguarde a confirmação automática.`);
 
-        const msgAdmin = `🚨 *SOLICITAÇÃO DE SETOR/MATRÍCULA*\n\n👤 *Nome:* ${solicitacoes[telefoneLimpo].nome}\n📱 *Contato:* ${telefoneLimpo}\n🔄 *Setor:* ${novoSetor}\n🔑 *Matrícula:* ${novaMatricula}\n\nPara aprovar, responda:\n*/aprovar ${telefoneLimpo}*`;
+        const msgAdmin = `🚨 *SOLICITAÇÃO DE SETOR/MATRÍCULA*\n\n👤 *Nome:* ${solicitacoes[telefoneLimpo].nome}\n📱 *Contato:* ${telefoneLimpo}\n🔄 *Setor:* ${novoSetor}\n🔑 *Matrícula:* ${novaMatricula}\n\nPara aprovar, responda:\n/aprovar ${telefoneLimpo}`;
         await client.sendMessage(LID_YURI, msgAdmin);
 
         delete etapas[numero];
@@ -100,23 +100,34 @@ async function aprovarTroca(client, message, telefoneAlvo) {
         }
         escreverJson(CAMINHO_SENHAS, senhas);
 
-        // --- 2. Atualiza Representantes.json ---
+// --- 2. Atualiza Representantes.json ---
         console.log(`[APROVAÇÃO] [2/4] Atualizando representantes.json...`);
         let representantes = lerJson(CAMINHO_REPRESENTANTES, []);
         
-        // CORREÇÃO: Busca pela chave "setor" no seu JSON original
+        // 🚨 CORREÇÃO: Varre o JSON para remover o vínculo do setor ANTIGO
+        const idxAntigo = representantes.findIndex(r => r.lid === pedido.id_whatsapp);
+        if (idxAntigo > -1) {
+            console.log(`[APROVAÇÃO] Removendo LID ${pedido.id_whatsapp} do setor antigo: ${representantes[idxAntigo].setor}`);
+            representantes[idxAntigo].lid = "";
+            representantes[idxAntigo].telefone = "";
+            representantes[idxAntigo].matricula = ""; // Limpa a matrícula do setor velho também
+            // Obs: Deixe o nome aí se quiser, ou limpe também para o AutoHealing refazer depois
+        }
+
+        // AGORA SIM: Busca o setor NOVO e atualiza
         const idxR = representantes.findIndex(r => r.setor === pedido.setor_novo);
 
         if (idxR > -1) {
             representantes[idxR].telefone = pedido.telefone;
             representantes[idxR].lid = pedido.id_whatsapp;
-            representantes[idxR].matricula = Number(pedido.matricula_nova);
-            delete representantes[idxR].Nome; // Remove a chave Nome (maiúsculo conforme seu arquivo)
+            representantes[idxR].matricula = pedido.matricula_nova;
+            delete representantes[idxR].Nome; 
             
             escreverJson(CAMINHO_REPRESENTANTES, representantes);
             console.log(`[APROVAÇÃO] representantes.json atualizado com sucesso.`);
         } else {
             console.log(`[APROVAÇÃO] ⚠️ Setor ${pedido.setor_novo} não encontrado no arquivo representantes.json`);
+            // Se quiser criar o setor caso não exista, basta dar um push aqui.
         }
 
         // --- 3. Grava o arquivo CSV na Rede (Formato Excel) ---

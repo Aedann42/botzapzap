@@ -16,7 +16,7 @@ const C_BLUE = '\x1b[34m';
 const C_CYAN = '\x1b[36m';
 
 // --- CONFIGURAÇÃO DE CAMINHOS ---
-const PASTA_PERFORMANCE = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\4 - ABRIL\\_GERADOR PDF';
+const PASTA_PERFORMANCE = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\5 - MAIO\\_GERADOR PDF';
 const ARQUIVO_PERFORMANCE = path.join(PASTA_PERFORMANCE, 'Acomp Performance.xlsx');
 const PASTA_BANCO_DADOS = 'C:\\botzapzap\\botzapzap\\data\\hist';
 

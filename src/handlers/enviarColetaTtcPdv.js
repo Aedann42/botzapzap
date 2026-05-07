@@ -1,4 +1,4 @@
-// src/handlers/enviarColetaTtcPdv.js (VERSÃO FINAL BLINDADA)
+// src/handlers/enviarColetaTtcPdv.js (VERSÃO FINAL BLINDADA - ATUALIZADA)
 
 const ExcelJS = require('exceljs');
 const path = require('path');
@@ -9,7 +9,7 @@ const CAMINHO_REPRESENTANTES = path.join(process.cwd(), 'data', 'representantes.
 const CAMINHO_STAFFS = path.join(process.cwd(), 'data', 'staffs.json');
 
 const CAMINHO_ARQUIVO_EXCEL = path.join(
-    '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\4 - ABRIL\\_GERADOR PDF',
+    '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\5 - MAIO\\_GERADOR PDF',
     'Acomp Coleta TTC.xlsx'
 );
 
@@ -176,9 +176,9 @@ module.exports = async (client, message) => {
             aba.eachRow((row, rowNumber) => {
                 if (rowNumber === 1) return; // Pula cabeçalho
 
-                // Coluna A (1) = UNB | Coluna B (2) = PDV
-                const codUnbPlanilha = getCellValueAsString(row.getCell(1)); 
-                const codPdvPlanilha = getCellValueAsString(row.getCell(2)); 
+                // Coluna 4 = COD_UNB | Coluna 5 = COD_PDV
+                const codUnbPlanilha = getCellValueAsString(row.getCell(4)); 
+                const codPdvPlanilha = getCellValueAsString(row.getCell(5)); 
                 
                 // FILTRO: Bate PDV e Bate UNB do setor do usuário
                 if (codPdvPlanilha === codigoPDV && codUnbPlanilha === UNB_Filtro) {
@@ -189,14 +189,14 @@ module.exports = async (client, message) => {
                         pdvInfo = {
                             codUnb: codUnbPlanilha,
                             codPdv: codPdvPlanilha,
-                            nomePdv: getCellValueAsString(row.getCell(3)),
-                            codSetor: getCellValueAsString(row.getCell(4)),
-                            frequencia: getCellValueAsString(row.getCell(5)),
+                            nomePdv: getCellValueAsString(row.getCell(6)),
+                            codSetor: getCellValueAsString(row.getCell(7)),
+                            frequencia: getCellValueAsString(row.getCell(8)),
                         };
                     }
 
-                    // Data mais recente
-                    const valorData = row.getCell(11).value;
+                    // Data mais recente (DATA_COLETA = Coluna 13)
+                    const valorData = row.getCell(13).value;
                     let dataLinha = null;
                     if (valorData instanceof Date) dataLinha = valorData;
                     else if (typeof valorData === 'number') dataLinha = new Date(new Date(1899, 11, 30).getTime() + valorData * 86400000);
@@ -206,22 +206,28 @@ module.exports = async (client, message) => {
                     }
 
                     // Dados da Linha
-                    const ttcAderido = parseFloat(row.getCell(8).value) || 0;
-                    const ttcColetado = parseFloat(row.getCell(9).value) || 0;
-                    const situacao = getCellValueAsString(row.getCell(10));
-                    const diff = ttcColetado - ttcAderido;
+                    const ttcAderido = parseFloat(row.getCell(11).value) || 0; // Coluna 11
+                    const ttcColetado = parseFloat(row.getCell(12).value) || 0; // Coluna 12
+                    const situacao = getCellValueAsString(row.getCell(15)); // Coluna 15
+const diff = ttcColetado - ttcAderido;
 
-                    if (situacao.toUpperCase().includes('ADERIDO')) {
+                    // Formata o texto removendo espaços em branco nas pontas e joga para maiúsculo
+                    const situacaoLimpa = situacao.toUpperCase().trim();
+                    
+                    // Verifica se é aderido, garantindo que NÃO contém as palavras de negação
+                    const isAderido = situacaoLimpa.includes('ADERIDO') && !situacaoLimpa.includes('NÃO') && !situacaoLimpa.includes('NAO');
+
+                    if (isAderido) {
                         totalAderido++;
                     }
 
-                    const emoji = situacao.toUpperCase().includes('ADERIDO') ? '✅' : '❌';
+                    const emoji = isAderido ? '✅' : '❌';
 
                     skusDetalhes.push(
-                        `*SKU:* ${getCellValueAsString(row.getCell(6))} - ${getCellValueAsString(row.getCell(7))}\n` +
+                        `*SKU:* ${getCellValueAsString(row.getCell(9))} - ${getCellValueAsString(row.getCell(10))}\n` +
                         `📈 *Meta:* ${formatarMoeda(ttcAderido)} | 📥 *Real:* ${formatarMoeda(ttcColetado)}\n` +
                         `📊 *Dif:* ${formatarMoeda(diff)} | ${emoji} *${situacao}*\n` +
-                        `🗓️ *Data:* ${formatarData(valorData)} | 🏷️ *Tipo:* ${getCellValueAsString(row.getCell(12))}`
+                        `🗓️ *Data:* ${formatarData(valorData)} | 🏷️ *Tipo:* ${getCellValueAsString(row.getCell(16))}`
                     );
                 }
             });

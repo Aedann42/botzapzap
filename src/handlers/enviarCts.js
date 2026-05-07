@@ -78,7 +78,7 @@ module.exports = async (client, message, representante) => {
 
     // 2. Definição do Caminho do Arquivo
     const arquivo = path.join(
-        '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\4 - ABRIL\\',
+        '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\5 - MAIO\\',
         '_CT - Controle Bonificacao.xlsx'
     );
 
