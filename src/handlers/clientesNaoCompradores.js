@@ -5,18 +5,11 @@ const csv = require('csv-parser');
 const path = require('path');
 const fs = require('fs');
 
-// Importa o sistema de etapas que você já usa no projeto
-const { lerJson, ETAPAS_PATH } = require('../utils/dataHandler.js');
-
-// --- CORES PARA O CONSOLE ---
-const C_RESET = '\x1b[0m';
-const C_RED = '\x1b[31m';
-const C_ORANGE = '\x1b[33m';
-const C_BLUE = '\x1b[34m';
-const C_CYAN = '\x1b[36m';
+// Importa o sistema de etapas e a nossa função de registrarUso padronizada
+const { lerJson, ETAPAS_PATH, registrarUso } = require('../utils/dataHandler.js');
 
 // --- CONFIGURAÇÃO DE CAMINHOS ---
-const PASTA_PERFORMANCE = '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\5 - MAIO\\_GERADOR PDF';
+const PASTA_PERFORMANCE = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2026\5 - MAIO\_GERADOR PDF`;
 const ARQUIVO_PERFORMANCE = path.join(PASTA_PERFORMANCE, 'Acomp Performance.xlsx');
 const PASTA_BANCO_DADOS = 'C:\\botzapzap\\botzapzap\\data\\hist';
 
@@ -72,13 +65,18 @@ function extrairDiaSemana(visitaString) {
 module.exports = async (client, message, representante) => {
     const numero = message.from;
     const textoDigitado = message.body.trim();
+    const telefoneLimpo = numero.includes('@') ? numero.split('@')[0] : numero;
+
+    // Utilitário de Log no Terminal (Padrão novo)
+    const getTime = () => new Date().toLocaleTimeString('pt-BR');
+    const logInd = (msg) => console.log(`[${getTime()}] 📊 [INDICADORES] [${numero}] ${msg}`);
+    const logErr = (msg, err) => console.error(`[${getTime()}] ❌ [INDICADORES] [${numero}] ${msg}`, err);
 
     if (!representante || !representante.setor) {
         await client.sendMessage(numero, '❌ Cadastro não identificado. Fale com o suporte.');
         return;
     }
 
-    // Carrega o arquivo JSON de etapas
     let etapas = lerJson(ETAPAS_PATH, {});
     let sessao = etapas[numero] || {};
 
@@ -86,6 +84,7 @@ module.exports = async (client, message, representante) => {
     if (textoDigitado.toLowerCase() === 'cancelar' || textoDigitado.toLowerCase() === 'sair' || textoDigitado.toLowerCase() === 'menu') {
         delete etapas[numero];
         salvarEtapas(etapas);
+        logInd('Operação cancelada pelo usuário.');
         await client.sendMessage(numero, '🛑 Consulta cancelada. Você voltou ao menu principal. Digite "menu" para ver as opções.');
         return;
     }
@@ -93,19 +92,18 @@ module.exports = async (client, message, representante) => {
     // ==========================================
     // ETAPA 1: INÍCIO DO COMANDO (Pedir Indicador)
     // ==========================================
-    if (!sessao.etapa || (sessao.etapa !== 'nc_indicador' && sessao.etapa !== 'nc_dia')) {
-        let msgInd = `📉 *CLIENTES NÃO COMPRADORES*\n\n`;
+    if (!sessao.etapa || (sessao.etapa !== 'nc_indicador' && sessao.etapa !== 'nc_dia' && sessao.etapa !== 'nc_tipo')) {
+        let msgInd = `📉 *ANÁLISE DE INDICADORES*\n\n`;
         msgInd += `Escolha o indicador (1-11):\n\n`;
         msgInd += `1 - AMBEV\n2 - MKTP\n3 - CERV\n4 - MATCH\n5 - CERV RGB\n6 - CERV 1/1\n7 - CERV 300\n8 - MEGABRANDS\n9 - NAB\n10 - RED BULL\n11 - R$ MKTP\n\n`;
         msgInd += `_(Digite o número ou "cancelar")_`;
 
         await client.sendMessage(numero, msgInd);
         
-        // Salva a etapa do usuário no JSON
         etapas[numero] = { etapa: 'nc_indicador' };
         salvarEtapas(etapas);
         
-        console.log(`${C_BLUE}👤 Iniciado Não Compradores para ${numero} (Setor: ${representante.setor}). Aguardando indicador...${C_RESET}`);
+        logInd(`Iniciado fluxo de indicadores. Aguardando escolha do indicador...`);
         return;
     }
 
@@ -133,19 +131,18 @@ module.exports = async (client, message, representante) => {
 
         await client.sendMessage(numero, msgDias);
 
-        // Atualiza a etapa salvando o indicador escolhido
         etapas[numero] = { 
             etapa: 'nc_dia', 
             indicador: indicadorDesejado 
         };
         salvarEtapas(etapas);
         
-        console.log(`${C_BLUE}👤 ${numero} escolheu o indicador ${indicadorDesejado}. Aguardando dia...${C_RESET}`);
+        logInd(`Indicador escolhido: ${indicadorDesejado}. Aguardando dia...`);
         return;
     }
 
     // ==========================================
-    // ETAPA 3: VALIDAR O DIA E PROCESSAR ARQUIVOS
+    // ETAPA 3: VALIDAR O DIA E PEDIR O TIPO (NOVA ETAPA)
     // ==========================================
     if (sessao.etapa === 'nc_dia') {
         const diaDesejado = MAPA_DIAS[textoDigitado];
@@ -155,14 +152,48 @@ module.exports = async (client, message, representante) => {
             return;
         }
 
+        let msgTipo = `📅 Dia selecionado: *${diaDesejado}*\n\n`;
+        msgTipo += `O que você deseja analisar em *${sessao.indicador}*?\n\n`;
+        msgTipo += `*1* - 📉 NÃO COMPRARAM (Estão zerados)\n`;
+        msgTipo += `*2* - 📈 COMPRARAM (Já positivaram)\n\n`;
+        msgTipo += `_(Digite 1 ou 2, ou "cancelar")_`;
+
+        await client.sendMessage(numero, msgTipo);
+
+        etapas[numero] = {
+            etapa: 'nc_tipo',
+            indicador: sessao.indicador,
+            dia: diaDesejado
+        };
+        salvarEtapas(etapas);
+
+        logInd(`Dia escolhido: ${diaDesejado}. Aguardando tipo de filtro (Comprador/Não Comprador)...`);
+        return;
+    }
+
+    // ==========================================
+    // ETAPA 4: PROCESSAR ARQUIVOS (COMPRADOR OU NÃO COMPRADOR)
+    // ==========================================
+    if (sessao.etapa === 'nc_tipo') {
+        const tipoEscolhido = textoDigitado;
+
+        if (tipoEscolhido !== '1' && tipoEscolhido !== '2') {
+            await client.sendMessage(numero, `⚠️ *Opção inválida.*\nDigite *1* para Não Compradores ou *2* para Compradores, ou *cancelar* para sair.`);
+            return;
+        }
+
+        const isComprador = tipoEscolhido === '2'; // Se for 2, busca os que compraram (>= 1). Se for 1, busca zerados (0).
+        const tipoNome = isComprador ? 'COMPRADORES' : 'NÃO COMPRADORES';
+        
         const indicadorDesejado = sessao.indicador;
+        const diaDesejado = sessao.dia;
         const setorDoUsuario = String(representante.setor).trim();
         const colunaAlvo = COLUNAS_PRODUTIVIDADE[indicadorDesejado];
         const mesReferencia = obterAbaMesPassado();
         const arquivoHistoricoCsv = path.join(PASTA_BANCO_DADOS, `2026_${mesReferencia}.csv`);
         const diaRealHoje = obterDiaVisitaHoje();
 
-        // Limpa a etapa imediatamente para evitar loops caso dê erro no processo
+        // Limpa a etapa imediatamente para evitar loops
         delete etapas[numero];
         salvarEtapas(etapas);
 
@@ -176,7 +207,7 @@ module.exports = async (client, message, representante) => {
         } else if (diaDesejado === 'HOJE') {
             if (diaRealHoje === 'SAB' || diaRealHoje === 'DOM') {
                 await client.sendMessage(numero, `🏖️ Bom descanso! Hoje é ${diaRealHoje} e não há visitas programadas na rota regular.`);
-                console.log(`${C_ORANGE}⚠️ Cancelado: Tentativa de buscar HOJE no FDS (${setorDoUsuario}).${C_RESET}`);
+                logInd(`Cancelado: Tentativa de buscar HOJE no FDS.`);
                 return;
             }
             diasAlvo = [diaRealHoje];
@@ -186,25 +217,19 @@ module.exports = async (client, message, representante) => {
             nomeDiaExibicao = diaDesejado;
         }
 
-        console.log(`\n${C_CYAN}==================================================${C_RESET}`);
-        console.log(`${C_BLUE}🚀 PROCESSANDO DADOS | NÃO COMPRADORES${C_RESET}`);
-        console.log(`${C_BLUE}🏢 Setor:${C_RESET} ${setorDoUsuario}`);
-        console.log(`${C_BLUE}📊 Indicador:${C_RESET} ${indicadorDesejado}`);
-        console.log(`${C_BLUE}📅 Dia Alvo:${C_RESET} ${nomeDiaExibicao}`);
-        console.log(`${C_CYAN}==================================================${C_RESET}`);
-
-        await client.sendMessage(numero, `⏳ Gerando lista para *${nomeDiaExibicao}* no indicador *${indicadorDesejado}*...\n_Isso pode levar alguns segundos._`);
+        logInd(`🚀 Processando: ${tipoNome} | ${indicadorDesejado} | ${nomeDiaExibicao}`);
+        await client.sendMessage(numero, `⏳ Gerando lista de *${tipoNome}* para *${nomeDiaExibicao}* no indicador *${indicadorDesejado}*...\n_Isso pode levar alguns segundos._`);
 
         try {
             // LER ACOMP PERFORMANCE
             if (!fs.existsSync(ARQUIVO_PERFORMANCE)) throw new Error("Arquivo Performance não encontrado");
             
-            console.log(`[1/3] Lendo arquivo de Performance...`);
+            logInd(`[1/3] Lendo arquivo de Performance...`);
             const workbookPerf = new ExcelJS.Workbook();
             await workbookPerf.xlsx.readFile(ARQUIVO_PERFORMANCE);
             const abaBase = workbookPerf.getWorksheet('Base') || workbookPerf.worksheets[0];
 
-            let clientesZerados = [];
+            let clientesFiltrados = [];
             let chavesParaBuscar = new Set(); 
 
             abaBase.eachRow((row, rowNumber) => {
@@ -216,10 +241,13 @@ module.exports = async (client, message, representante) => {
 
                 const atendeDia = diasAlvo.some(d => visitaPlanilha.includes(d));
 
-                if (setorPlanilha === setorDoUsuario && valorIndicador === 0 && atendeDia) {
+                // A MÁGICA DO FILTRO NOVO AQUI:
+                const atendeFiltroDeCompra = isComprador ? (valorIndicador >= 1) : (valorIndicador === 0);
+
+                if (setorPlanilha === setorDoUsuario && atendeFiltroDeCompra && atendeDia) {
                     const chave = row.getCell('A').text.trim();
                     if (chave) {
-                        clientesZerados.push({
+                        clientesFiltrados.push({
                             chave: chave,
                             razaoSocial: row.getCell('C').text,
                             visita: visitaPlanilha,
@@ -233,21 +261,32 @@ module.exports = async (client, message, representante) => {
                 }
             });
 
-            console.log(`${C_ORANGE}✅ Encontrados ${clientesZerados.length} clientes zerados.${C_RESET}`);
+            logInd(`✅ Encontrados ${clientesFiltrados.length} clientes no filtro.`);
 
-            if (clientesZerados.length === 0) {
-                await client.sendMessage(numero, `🎉 *Sensacional!* Nenhum cliente da sua rota de *${nomeDiaExibicao}* está zerado em ${indicadorDesejado}.`);
+            if (clientesFiltrados.length === 0) {
+                if (isComprador) {
+                    await client.sendMessage(numero, `⚠️ Nenhum cliente da sua rota de *${nomeDiaExibicao}* comprou ${indicadorDesejado} ainda.`);
+                } else {
+                    await client.sendMessage(numero, `🎉 *Sensacional!* Nenhum cliente da sua rota de *${nomeDiaExibicao}* está zerado em ${indicadorDesejado}.`);
+                }
+                // REGISTRO DE USO SE A LISTA FOR VAZIA
+                try {
+                    const nomeFuncaoLog = isComprador ? `Compradores (${indicadorDesejado})` : `Não Compradores (${indicadorDesejado})`;
+                    await registrarUso(telefoneLimpo, nomeFuncaoLog, setorDoUsuario);
+                } catch (erroLog) {
+                    logErr('Erro ao registrar log de uso:', erroLog);
+                }
                 return;
             }
 
             // LER HISTÓRICO CSV
             if (!fs.existsSync(arquivoHistoricoCsv)) {
-                console.error(`${C_RED}❌ ERRO: Arquivo CSV não encontrado: ${arquivoHistoricoCsv}${C_RESET}`);
+                logErr(`Arquivo CSV não encontrado: ${arquivoHistoricoCsv}`);
                 await client.sendMessage(numero, `⚠️ O arquivo de histórico não foi encontrado. Avise o administrador.`);
                 return;
             }
 
-            console.log(`[2/3] Lendo histórico CSV (${mesReferencia})...`);
+            logInd(`[2/3] Lendo histórico CSV (${mesReferencia})...`);
 
             await new Promise((resolve, reject) => {
                 fs.createReadStream(arquivoHistoricoCsv)
@@ -258,7 +297,7 @@ module.exports = async (client, message, representante) => {
                     .on('data', (linha) => {
                         const chaveLinha = String(linha['Chave'] || '').trim();
                         if (chaveLinha && chavesParaBuscar.has(chaveLinha)) {
-                            const cliente = clientesZerados.find(c => c.chave === chaveLinha);
+                            const cliente = clientesFiltrados.find(c => c.chave === chaveLinha);
                             if (cliente) {
                                 const strValor = String(linha['Total Venda'] || '0').replace(',', '.');
                                 const valor = parseFloat(strValor) || 0;
@@ -278,14 +317,14 @@ module.exports = async (client, message, representante) => {
                     .on('error', (erro) => reject(erro));
             });
 
-            console.log(`${C_ORANGE}✅ Leitura CSV concluída.${C_RESET}`);
+            logInd(`✅ Leitura CSV concluída.`);
 
             // ORDENAR E MONTAR MENSAGEM
-            console.log(`[3/3] Montando mensagem visual...`);
+            logInd(`[3/3] Montando mensagem visual...`);
             
             const ordemDiasSemana = { 'SEG': 1, 'TER': 2, 'QUA': 3, 'QUI': 4, 'SEX': 5, 'OUTRO': 99 };
             
-            clientesZerados.sort((a, b) => {
+            clientesFiltrados.sort((a, b) => {
                 if (diaDesejado === 'TODOS') {
                     const diaA = ordemDiasSemana[extrairDiaSemana(a.visita)] || 99;
                     const diaB = ordemDiasSemana[extrairDiaSemana(b.visita)] || 99;
@@ -294,21 +333,25 @@ module.exports = async (client, message, representante) => {
                 return b.faturamentoTotal - a.faturamentoTotal;
             });
 
-            const pdvsZeroAbsoluto = clientesZerados.filter(c => c.historicoMesPassado.length === 0).length;
+            const pdvsSemHistorico = clientesFiltrados.filter(c => c.historicoMesPassado.length === 0).length;
 
-            let msg = `📉 *NÃO COMPRADORES | ${indicadorDesejado}*\n`;
+            let msg = isComprador ? `📈 *COMPRADORES | ${indicadorDesejado}*\n` : `📉 *NÃO COMPRADORES | ${indicadorDesejado}*\n`;
             msg += `📍 Setor: ${setorDoUsuario}  |  🗓️ Ref: ${mesReferencia}\n`;
-            msg += `🛑 *Total de PDVs alvos (${nomeDiaExibicao}): ${clientesZerados.length}*\n`;
+            msg += `🎯 *Total de PDVs alvos (${nomeDiaExibicao}): ${clientesFiltrados.length}*\n`;
             
-            if (pdvsZeroAbsoluto > 0) {
-                msg += `\n🚨 *AVISO:* ${pdvsZeroAbsoluto} PDVs desta lista também foram *venda zero* no mês passado!\n`;
+            if (pdvsSemHistorico > 0) {
+                if (isComprador) {
+                    msg += `\n🌟 *RECUPERADOS:* ${pdvsSemHistorico} PDVs desta lista não compraram no mês passado, mas agora compraram!\n`;
+                } else {
+                    msg += `\n🚨 *AVISO:* ${pdvsSemHistorico} PDVs desta lista também foram *venda zero* no mês passado!\n`;
+                }
             }
             
             msg += `-------------------------------------------\n`;
 
             let diaAtualNoLoop = "";
 
-            clientesZerados.forEach((c, index) => {
+            clientesFiltrados.forEach((c, index) => {
                 if (diaDesejado === 'TODOS') {
                     const diaDoCliente = extrairDiaSemana(c.visita);
                     if (diaDoCliente !== diaAtualNoLoop) {
@@ -344,10 +387,21 @@ module.exports = async (client, message, representante) => {
             });
 
             await client.sendMessage(numero, msg);
-            console.log(`${C_ORANGE}✅ Sucesso! Mensagem final processada e enviada para ${numero}!${C_RESET}\n`);
+            logInd(`✅ Mensagem enviada com sucesso!`);
+
+            // ==========================================
+            // REGISTRO NO LOG DE USO (MÉTODO DO DATAHANDLER)
+            // ==========================================
+            try {
+                const nomeFuncaoLog = isComprador ? `Compradores (${indicadorDesejado})` : `Não Compradores (${indicadorDesejado})`;
+                await registrarUso(telefoneLimpo, nomeFuncaoLog, setorDoUsuario);
+            } catch (erroLog) {
+                logErr('Erro ao registrar log de uso:', erroLog);
+            }
+            // ==========================================
 
         } catch (error) {
-            console.error(`\n${C_RED}❌ [ClientesNaoCompradores] Erro Crítico:${C_RESET}`, error);
+            logErr('Erro Crítico no processamento:', error);
             await client.sendMessage(numero, '❌ Ocorreu um erro interno ao processar os arquivos. Avise o suporte.');
         }
     }

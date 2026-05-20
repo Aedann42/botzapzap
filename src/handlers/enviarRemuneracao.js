@@ -1,9 +1,9 @@
-// src/handlers/enviarRemuneracao.js (VERSÃO FINAL - CORRIGIDA)
-
-const fs = require('fs');
+// src/handlers/enviarRemuneracao.js
+const fsSync = require('fs');
+const fs = require('fs').promises; // Usando promises para não travar o bot
 const path = require('path');
 const { MessageMedia } = require('whatsapp-web.js');
-const { escreverJson, ETAPAS_PATH } = require('../utils/dataHandler.js');
+const { escreverJson, ETAPAS_PATH, registrarUso } = require('../utils/dataHandler.js');
 
 const CAMINHO_REPRESENTANTES = path.join(process.cwd(), 'data', 'representantes.json');
 const CAMINHO_SENHAS = path.join(process.cwd(), 'data', 'representantes.json');
@@ -11,12 +11,17 @@ const CAMINHO_SENHAS = path.join(process.cwd(), 'data', 'representantes.json');
 let isSendingRemuneracao = false;
 const remuneracaoSendQueue = [];
 
-function lerJsonSeguro(caminho) {
+// Utilitários de Log no Terminal
+const getTime = () => new Date().toLocaleTimeString('pt-BR');
+const logRemuneracao = (numero, msg) => console.log(`[${getTime()}] 💰 [REMUNERAÇÃO] [${numero}] ${msg}`);
+const logFila = (msg) => console.log(`[${getTime()}] 🚦 [FILA-REM] ${msg}`);
+
+async function lerJsonSeguroAsync(caminho) {
     try {
-        const data = fs.readFileSync(caminho, 'utf-8');
+        const data = await fs.readFile(caminho, 'utf-8');
         return JSON.parse(data);
     } catch (e) {
-        console.error(`Erro ao ler JSON em ${caminho}:`, e);
+        console.error(`[${getTime()}] ❌ Erro ao ler JSON em ${caminho}:`, e);
         return [];
     }
 }
@@ -24,7 +29,7 @@ function lerJsonSeguro(caminho) {
 async function processNextRemuneracaoRequest() {
     if (remuneracaoSendQueue.length === 0) {
         isSendingRemuneracao = false;
-        console.log('[enviarRemuneracao.js Fila] Fila vazia. Processamento em pausa.');
+        logFila('Fila vazia. Processamento em pausa.');
         return;
     }
 
@@ -32,62 +37,59 @@ async function processNextRemuneracaoRequest() {
     const { client, message, matricula } = remuneracaoSendQueue.shift();
     const numero = message.from; 
 
-    console.log(`[enviarRemuneracao.js Fila] Processando solicitação para ${numero} (Matrícula: ${matricula})`);
+    logFila(`Processando solicitação para ${numero} (Matrícula: ${matricula})`);
 
     try {
-        let telefoneLimpo;
-        if (numero.includes('@')) {
-            telefoneLimpo = numero.split('@')[0];
-        } else {
-            telefoneLimpo = numero;
-        }
+        const telefoneLimpo = numero.includes('@') ? numero.split('@')[0] : numero;
 
-        const representantes = lerJsonSeguro(CAMINHO_REPRESENTANTES);
-        
+        const representantes = await lerJsonSeguroAsync(CAMINHO_REPRESENTANTES);
         const representante = representantes.find(r => 
             String(r.telefone).trim() === String(telefoneLimpo).trim() || 
             (r.lid && r.lid === numero)
         );
 
         if (!representante || !representante.setor) {
-            console.log(`[enviarRemuneracao.js] Erro: Usuário não encontrado ou sem setor. ID: ${numero}`);
+            logRemuneracao(numero, `❌ Usuário não encontrado ou sem setor.`);
             await client.sendMessage(numero, '❌ Seus dados não foram encontrados no cadastro de representantes ou você não possui setor definido.');
             return; 
         }
         
-        const setor = representante.setor.toString();
+        const setor = String(representante.setor); // Forma segura de converter
         
         const diretorioPath = path.join(
             String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2026\5 - MAIO\_GERADOR PDF\REMUNERACAO`,
             setor
         );
 
-        console.log("[enviarRemuneracao.js] 📁 Tentando acessar a pasta em:", diretorioPath);
+        logRemuneracao(numero, `📂 Tentando acessar a pasta em: ${diretorioPath}`);
 
-        if (!fs.existsSync(diretorioPath)) {
-            await client.sendMessage(numero, `❌ A pasta de enviarRemuneracao.js para o setor ${setor} não foi encontrada.`);
+        try {
+            await fs.access(diretorioPath);
+        } catch (e) {
+            logRemuneracao(numero, `⚠️ A pasta do setor ${setor} não foi encontrada.`);
+            await client.sendMessage(numero, `❌ A pasta de remuneração para o setor ${setor} não foi encontrada no servidor.`);
+            return;
+        }
+
+        const arquivos = await fs.readdir(diretorioPath);
+        const arquivosValidos = arquivos.filter(nome => 
+            !nome.startsWith('~') && !nome.startsWith('.') && nome.toLowerCase() !== 'thumbs.db'
+        );
+
+        if (arquivosValidos.length === 0) {
+            logRemuneracao(numero, `⚠️ A pasta do setor ${setor} foi encontrada, mas está vazia.`);
+            await client.sendMessage(numero, `⚠️ A pasta do setor ${setor} foi encontrada, mas está vazia.`);
             return; 
         }
 
-        const arquivos = fs.readdirSync(diretorioPath);
+        await client.sendMessage(numero, `🔄 Encontrei! 🏋️ Preparando para envio, aguarde ⏰...`);
 
-        if (arquivos.length === 0) {
-            await client.sendMessage(numero, `⚠️ A pasta do setor ${setor} foi encontrada, mas está vazia. Nenhum arquivo para enviar.`);
-            return; 
-        }
-
-        await client.sendMessage(numero, `🔄 Encontrei !!! 🏋️ Preparando para envio, aguarde ⏰...`);
-
-        for (const nomeArquivo of arquivos) {
+        // Envia os arquivos
+        for (const nomeArquivo of arquivosValidos) {
             const caminhoCompletoArquivo = path.join(diretorioPath, nomeArquivo);
-            
-            if (nomeArquivo.startsWith('~') || nomeArquivo.startsWith('.')|| nomeArquivo.toLowerCase() ==='thumbs.db') {
-                continue; 
-            }
-
             const media = MessageMedia.fromFilePath(caminhoCompletoArquivo);
             
-            console.log(`[enviarRemuneracao.js Fila] Enviando arquivo "${nomeArquivo}" para ${numero}.`);
+            logRemuneracao(numero, `📤 Enviando arquivo: "${nomeArquivo}"`);
             await client.sendMessage(numero, media, {
                 sendMediaAsDocument: true,
                 caption: `📄 Segue o arquivo: ${nomeArquivo}`
@@ -95,13 +97,20 @@ async function processNextRemuneracaoRequest() {
         }
 
         await client.sendMessage(numero, '✅ Todos os seus arquivos foram enviados com sucesso!');
-        //await client.sendSeen(numero);
-        console.log(`[enviarRemuneracao.js Fila] Arquivos enviados com sucesso para ${numero}.`);
+        logRemuneracao(numero, `✅ Fluxo concluído. Arquivos enviados com sucesso.`);
+
+        // Salva o registro de uso da funcionalidade e printa bonitão no terminal
+        try {
+            await registrarUso(telefoneLimpo, 'Remuneração', setor);
+        } catch (erroLog) {
+            console.error(`[${getTime()}] ❌ Erro ao registrar log de uso:`, erroLog);
+        }
 
     } catch (err) {
-        console.error("❌ Erro inesperado ao processar enviarRemuneracao.js na fila:", err);
-        await client.sendMessage(numero, "❌ Ocorreu um erro ao enviar sua planilha de enviarRemuneracao.js. Por favor, tente novamente mais tarde.");
+        console.error(`[${getTime()}] ❌ [ERRO-FILA] [${numero}] Erro inesperado:`, err);
+        await client.sendMessage(numero, "❌ Ocorreu um erro ao enviar sua planilha. Por favor, tente novamente mais tarde.");
     } finally {
+        // Sempre chama o próximo da fila, mesmo se der erro no atual
         processNextRemuneracaoRequest();
     }
 }
@@ -111,98 +120,100 @@ async function enviarRemuneracao(client, message) {
     const texto = message.body.trim();
     const isOperatorRequest = message._operator_triggered === true;
 
-    function lerEtapas() {
-        try { return JSON.parse(fs.readFileSync(ETAPAS_PATH, 'utf-8')); } catch { return {}; }
-    }
-    
-    let etapas = lerEtapas();
-    const etapaAtual = etapas[numero] ? etapas[numero].etapa : undefined;
+    try {
+        function lerEtapas() {
+            try { return JSON.parse(fsSync.readFileSync(ETAPAS_PATH, 'utf-8')); } catch { return {}; }
+        }
+        
+        let etapas = lerEtapas();
+        const etapaAtual = etapas[numero] ? etapas[numero].etapa : undefined;
 
-    if (texto.toLowerCase() === 'cancelar' || texto.toLowerCase() === 'sair') {
-        if (etapas[numero]) {
+        if (texto.toLowerCase() === 'cancelar' || texto.toLowerCase() === 'sair') {
+            if (etapas[numero]) {
+                delete etapas[numero];
+                escreverJson(ETAPAS_PATH, etapas);
+                logRemuneracao(numero, `🛑 Operação cancelada pelo usuário.`);
+                await client.sendMessage(numero, '🚫 Operação de remuneração cancelada.');
+            }
+            return;
+        }
+
+        if (isOperatorRequest) {
+            logRemuneracao(numero, `👨‍💻 Operador solicitou o envio forçado (BYPASS).`);
+            remuneracaoSendQueue.push({ client, message, matricula: 'BYPASS_OPERADOR' });
+
+            if (!isSendingRemuneracao) {
+                processNextRemuneracaoRequest();
+            } else {
+                logFila(`Usuário ${numero} adicionado à fila pelo operador.`);
+                await client.sendMessage(numero, '👍 Você foi adicionado à fila.');
+            }
+            return; 
+        }
+
+        if (etapaAtual === 'remuneracao') {
+            const matricula = texto.replace(/\D/g, '');
+
+            if (!/^\d+$/.test(matricula) || matricula.length === 0) {
+                await client.sendMessage(numero, '❗ Por favor, digite apenas os *números* da sua matrícula.');
+                return;
+            }
+            
+            const telefoneLimpo = numero.includes('@') ? numero.split('@')[0] : numero;
+            
+            const representantes = await lerJsonSeguroAsync(CAMINHO_REPRESENTANTES);
+            const senhaRemuneracao = await lerJsonSeguroAsync(CAMINHO_SENHAS);
+            
+            const representante = representantes.find(r => 
+                String(r.telefone).trim() === String(telefoneLimpo).trim() || 
+                (r.lid && r.lid === numero)
+            );
+
+            const setor = representante?.setor ? String(representante.setor) : null;
+
+            if (!setor) {
+                await client.sendMessage(numero, `❌ Seu cadastro não possui setor definido.`);
+                delete etapas[numero];
+                escreverJson(ETAPAS_PATH, etapas);
+                return;
+            }
+
+            const credencialValida = senhaRemuneracao.find(
+                item => String(item.setor) === setor && String(item.matricula) === matricula
+            );
+
+            if (!credencialValida) {
+                logRemuneracao(numero, `❌ Tentativa de acesso negada. Matrícula incorreta: ${matricula}`);
+                await client.sendMessage(numero, `❌ Você digitou "${matricula}". Matrícula incorreta para o seu setor. Peça a opção 4 novamente!`);
+                delete etapas[numero];
+                escreverJson(ETAPAS_PATH, etapas);
+                return;
+            }
+
+            logRemuneracao(numero, `🔓 Credenciais validadas (Matrícula: ${matricula}). Indo para a fila.`);
             delete etapas[numero];
             escreverJson(ETAPAS_PATH, etapas);
-            await client.sendMessage(numero, '🚫 Operação de enviarRemuneracao.js cancelada.');
-        }
-        return;
-    }
 
-    if (isOperatorRequest) {
-        console.log(`[OPERADOR] Requisição de enviarRemuneracao.js para ${numero}`);
-        
-        let telefoneLimpo = numero.includes('@') ? numero.split('@')[0] : numero;
-        
-        const representantes = lerJsonSeguro(CAMINHO_REPRESENTANTES);
-        const representante = representantes.find(r => 
-            String(r.telefone).trim() === String(telefoneLimpo).trim() || 
-            (r.lid && r.lid === numero)
-        );
-
-        if (!representante || !representante.setor) {
-            await client.sendMessage(numero, '❌ Cadastro do representante não encontrado ou sem setor definido.');
-            return;
+            remuneracaoSendQueue.push({ client, message, matricula });
+            
+            if (!isSendingRemuneracao) {
+                processNextRemuneracaoRequest();
+            } else {
+                logFila(`Usuário ${numero} adicionado à fila.`);
+                await client.sendMessage(numero, '👍 Você foi adicionado à fila. Aguarde o envio.');
+            }
+            return; 
         }
 
-        remuneracaoSendQueue.push({ client, message, matricula: 'BYPASS_OPERADOR' });
-
-        if (!isSendingRemuneracao) {
-            processNextRemuneracaoRequest();
-        } else {
-            await client.sendMessage(numero, '👍 Você foi adicionado à fila.');
-        }
-        return; 
-    }
-
-    if (etapaAtual === 'remuneracao') {
-        const matricula = texto.replace(/\D/g, '');
-
-        if (!/^\d+$/.test(matricula) || matricula.length === 0) {
-            await client.sendMessage(numero, '❗ Por favor, digite apenas os *números* da sua matrícula.');
-            return;
-        }
-        
-        let telefoneLimpo = numero.includes('@') ? numero.split('@')[0] : numero;
-        
-        const representantes = lerJsonSeguro(CAMINHO_REPRESENTANTES);
-        const senhaRemuneracao = lerJsonSeguro(CAMINHO_SENHAS);
-        
-        const representante = representantes.find(r => 
-            String(r.telefone).trim() === String(telefoneLimpo).trim() || 
-            (r.lid && r.lid === numero)
-        );
-
-        const setor = representante?.setor?.toString();
-
-        const credencialValida = senhaRemuneracao.find(
-            item => item.setor?.toString() === setor && item.matricula?.toString() === matricula
-        );
-
-        // --- CORREÇÃO AQUI ---
-        if (!credencialValida) {
-            // Corrigido para usar crases e a variável 'matricula'
-            await client.sendMessage(numero, `❌ Você digitou "${matricula}". Matrícula incorreta para o seu setor. Peça a opção 4 novamente!`);
-            delete etapas[numero];
-            escreverJson(ETAPAS_PATH, etapas);
-            return;
-        }
-
-        delete etapas[numero];
+        logRemuneracao(numero, `Iniciou o fluxo de remuneração. Aguardando matrícula.`);
+        etapas[numero] = { etapa: 'remuneracao' };
         escreverJson(ETAPAS_PATH, etapas);
+        await client.sendMessage(numero, 'Por favor, informe sua *matrícula* para continuar (apenas números).');
 
-        remuneracaoSendQueue.push({ client, message, matricula });
-        console.log(`[enviarRemuneracao.js] Usuário ${numero} adicionado à fila.`);
-
-        if (!isSendingRemuneracao) {
-            processNextRemuneracaoRequest();
-        } else {
-            await client.sendMessage(numero, '👍 Você foi adicionado à fila. Aguarde o envio.');
-        }
-        return; 
+    } catch (error) {
+        console.error(`[${getTime()}] ❌ Erro Crítico em enviarRemuneracao:`, error);
+        await client.sendMessage(numero, '❌ Ocorreu um erro interno ao processar sua solicitação.');
     }
-
-    etapas[numero] = { etapa: 'remuneracao' };
-    escreverJson(ETAPAS_PATH, etapas);
-    await client.sendMessage(numero, 'Por favor, informe sua *matrícula* para continuar (apenas números).');
 }
 
 module.exports = enviarRemuneracao;

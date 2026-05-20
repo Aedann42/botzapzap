@@ -73,8 +73,8 @@ async function handleMenu(client, message, representante, numeroTelefoneLimpo, M
             return await processarTroca(client, message, representante);
         }
 
-        // 🔥 CORREÇÃO: Repassa para o handler sem apagar a etapa. O próprio handler gerencia isso.
-        if (etapaAtual === 'nc_indicador' || etapaAtual === 'nc_dia') {
+        // 🔥 CORREÇÃO APLICADA AQUI: Reconhece TODAS as etapas (nc_indicador, nc_dia, nc_tipo)
+        if (etapaAtual.startsWith('nc_')) {
             const finalizar = await simularHumano(message);
             await clientesNaoCompradores(client, message, representante);
             await finalizar();
@@ -340,7 +340,6 @@ async function handleMenu(client, message, representante, numeroTelefoneLimpo, M
             break;
         }
         case '11': {
-            // 🔥 CORREÇÃO: Chama direto o handler, ele mesmo se encarrega de iniciar a etapa 'nc_indicador'
             const finalizar = await simularHumano(message);
             await clientesNaoCompradores(client, message, representante);
             await finalizar();

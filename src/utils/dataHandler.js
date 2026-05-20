@@ -1,6 +1,7 @@
 // src/utils/dataHandler.js
 const fs = require('fs');
 const path = require('path');
+const chalk = require('chalk');
 
 // --- Caminhos dos Arquivos de Dados ---
 // Ajuste de navegação: src > utils > (..) src > (..) root > data
@@ -71,11 +72,12 @@ async function registrarUso(numero, nomeFuncao, setorParam = null) {
 
         const logUso = lerJson(LOG_USO_PATH, []);
         const timestamp = new Date();
+        const horaFormatada = timestamp.toLocaleTimeString('pt-BR');
 
         const novoRegistro = {
             timestamp: timestamp.toISOString(),
             data: timestamp.toLocaleDateString('pt-BR'), // Ex: 11/02/2026
-            hora: timestamp.toLocaleTimeString('pt-BR'), // Ex: 14:30:00
+            hora: horaFormatada, // Ex: 14:30:00
             telefone: numero.replace('@c.us', ''),
             setor: setorFinal,
             funcao: nomeFuncao
@@ -84,10 +86,11 @@ async function registrarUso(numero, nomeFuncao, setorParam = null) {
         logUso.push(novoRegistro);
         escreverJson(LOG_USO_PATH, logUso);
         
-        console.log(`📝 [LOG] Setor: ${setorFinal} | Ação: ${nomeFuncao}`);
+        // Log com horário, emoji verde e aviso claro no terminal
+        console.log(chalk.greenBright(`[${horaFormatada}] 💾 [${nomeFuncao}] Salvo no log_uso.json | Setor: ${setorFinal}`));
         
     } catch (error) {
-        console.error('Erro ao registrar o uso:', error);
+        console.error(chalk.red(`[Erro] Falha ao registrar o uso no log_uso.json:`), error);
     }
 }
 
