@@ -253,8 +253,8 @@ async function handleMenu(client, message, representante, numeroTelefoneLimpo, M
     // ============================================================================================
     // 2. SWITCH DO MENU PRINCIPAL (Opções 1 a 12)
     // ============================================================================================
-    const CAMINHO_CHECK_PDF = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2026\6 - JUNHO\_GERADOR PDF\ACOMPS\410\410_Volume.pdf`;
-    const CAMINHO_CHECK_IMAGEM = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2026\6 - JUNHO\_GERADOR PDF\IMAGENS\GV4\MATINAL_GV4_page_1.jpg`;
+    const CAMINHO_CHECK_PDF = String.raw`\\revenda.local\publico\Arquivos\VENDAS\METAS E PROJETOS\2026\6 - JUNHO\_GERADOR PDF\ACOMPS\411\411_GiroEquipamentos.pdf`;
+    const CAMINHO_CHECK_IMAGEM = String.raw`\\revenda.local\publico\Arquivos\VENDAS\METAS E PROJETOS\2026\6 - JUNHO\_GERADOR PDF\IMAGENS\GV4\MATINAL_GV4_page_1.jpg`;
 
     switch (opcao) {
         case '1': {

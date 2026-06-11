@@ -3,7 +3,7 @@ const MENU_TEXT = `
 🌟 Escolha uma opção abaixo para que eu possa te ajudar: 🌟
 
 1️⃣ - Quero meus relatórios em PDF 📄✨
-2️⃣ - Quero meus relatórios em imagens 🖼️🎨
+2️⃣ - Quero meus relatórios em imagens (descontinuado) 🖼️🎨
 3️⃣ - Preciso de ajuda do APR para demais assuntos 💬🤔
 4️⃣ - Quero minha planilha de remuneração 💼💰 
 5️⃣ - Consultar tarefas do PDV 📋🔍

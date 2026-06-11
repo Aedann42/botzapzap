@@ -8,7 +8,7 @@ const CAMINHO_REPRESENTANTES = path.join(process.cwd(), 'data', 'representantes.
 const CAMINHO_STAFFS = path.join(process.cwd(), 'data', 'staffs.json');
 
 const CAMINHO_ARQUIVO_EXCEL = path.join(
-    '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\6 - JUNHO\\_GERADOR PDF',
+    '\\\\revenda.local\\publico\\arquivos\\VENDAS\\METAS E PROJETOS\\2026\\6 - JUNHO\\_GERADOR PDF',
     'Acomp Giro de Equipamentos.xlsx'
 );
 

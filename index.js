@@ -22,8 +22,8 @@ const FORA_BASE_PATH = path.join(__dirname, 'data', 'atendidosForaDaBase.json');
 const MENU_TEXT = require('./src/config/menuOptions');
 const MENSAGEM_PDV = require('./src/config/mensagemPDV');
 const CAMINHOS_SERVER = {
-    pdf: '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\6 - JUNHO\\_GERADOR PDF\\ACOMPS\\410\\410_Volume.pdf',
-    imagem: '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\6 - JUNHO\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_1.jpg'
+    pdf: '\\\\revenda.local\\publico\\arquivos\\VENDAS\\METAS E PROJETOS\\2026\\6 - JUNHO\\_GERADOR PDF\\ACOMPS\\410\\410_Volume.pdf',
+    imagem: '\\\\revenda.local\\publico\\arquivos\\VENDAS\\METAS E PROJETOS\\2026\\6 - JUNHO\\_GERADOR PDF\\IMAGENS\\GV4\\MATINAL_GV4_page_1.jpg'
 };
 
 const usuariosAguardandoRelatorio = {};
@@ -42,6 +42,29 @@ const client = new Client({
         ]
     }
 });
+
+async function verificarAtualizacaoPuppeteer() {
+    try {
+        // Puxa a versão que está instalada na sua pasta node_modules
+        const versaoAtual = require('puppeteer/package.json').version;
+        
+        // Consulta o NPM para ver qual é a última versão lançada
+        const response = await fetch('https://registry.npmjs.org/puppeteer/latest');
+        const data = await response.json();
+        const versaoMaisRecente = data.version;
+
+        console.log(chalk.cyan(`\n📦 Verificando versão do Puppeteer...`));
+        console.log(chalk.gray(`Versão atual: v${versaoAtual} | Última versão: v${versaoMaisRecente}`));
+
+        if (versaoAtual !== versaoMaisRecente) {
+            console.log(chalk.yellow(`⚠️ Atualização disponível! Para atualizar, pare o bot e rode: npm install puppeteer@latest\n`));
+        } else {
+            console.log(chalk.green(`✅ O Puppeteer está atualizado na última versão!\n`));
+        }
+    } catch (error) {
+        console.log(chalk.red(`❌ Não foi possível verificar a versão do Puppeteer: ${error.message}\n`));
+    }
+}
 
 // ============================================================================================
 // === PROCESSAMENTO DE MENSAGENS (COM GATILHOS DE ADMIN) ===
@@ -149,8 +172,12 @@ client.on('message_create', async (msg) => {
 });
 
 client.on('qr', qr => qrcode.generate(qr, { small: true }));
-client.on('ready', () => {
+client.on('ready', async () => { // <--- O 'async' entra bem aqui!
     console.log(chalk.green('✅ Bot conectado e operacional!'));
+    
+    // Agora o await funciona perfeitamente
+    await verificarAtualizacaoPuppeteer(); 
+
     iniciarPainel();
     monitorarArquivos(client, usuariosAguardandoRelatorio, CAMINHOS_SERVER, CAMINHO_JSON_REAL);
 });

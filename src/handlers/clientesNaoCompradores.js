@@ -9,7 +9,7 @@ const fs = require('fs');
 const { lerJson, ETAPAS_PATH, registrarUso } = require('../utils/dataHandler.js');
 
 // --- CONFIGURAÇÃO DE CAMINHOS ---
-const PASTA_PERFORMANCE = String.raw`\\VSRV-DC01\Arquivos\VENDAS\METAS E PROJETOS\2026\6 - JUNHO\_GERADOR PDF`;
+const PASTA_PERFORMANCE = String.raw`\\revenda.local\publico\Arquivos\VENDAS\METAS E PROJETOS\2026\6 - JUNHO\_GERADOR PDF`;
 const ARQUIVO_PERFORMANCE = path.join(PASTA_PERFORMANCE, 'Acomp Performance.xlsx');
 const PASTA_BANCO_DADOS = 'C:\\botzapzap\\botzapzap\\data\\hist';
 

@@ -4,7 +4,7 @@ const path = require('path');
 
 // Caminho atualizado para DEZEMBRO conforme sua solicitação
 const CAMINHO_ARQUIVO_EXCEL = path.join(
-    '\\\\VSRV-DC01\\Arquivos\\VENDAS\\METAS E PROJETOS\\2026\\6 - JUNHO\\_GERADOR PDF\\',
+    '\\\\revenda.local\\publico\\arquivos\\VENDAS\\METAS E PROJETOS\\2026\\6 - JUNHO\\_GERADOR PDF\\',
     'Acomp Tarefas do Dia.xlsx'
 );
 
