@@ -19,6 +19,7 @@
     "mime-types": "^3.0.1",
     "node-cron": "^4.2.1",
     "pdfreader": "^3.0.8",
+    "proj4": "^2.20.9",
     "qrcode-terminal": "^0.12.0",
     "whatsapp-web.js": "^1.34.7",
     "xlsx": "^0.18.5"

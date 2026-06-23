@@ -17,8 +17,147 @@ const enviarColetaTtcPdv = require('./enviarColetaTtcPdv');
 const enviarGiroEquipamentosPdv = require('./enviarGiroEquipamentosPdv');
 const clientesNaoCompradores = require('./clientesNaoCompradores');
 const { processarTroca } = require('./mudancaSetor');
-const { processarAnaliseRota, salvarPedidoEntrega, formatarMoeda, obterEstatisticasPdv } = require('./analiseRotasHandler');
 
+const { 
+    processarAnaliseRota, 
+    salvarPedidoEntrega, 
+    formatarMoeda, 
+    obterEstatisticasPdv, 
+    verificarBloqueio30Dias 
+} = require('./analiseRotasHandler');
+
+const { REGRAS_FATURAMENTO, REGRAS_DISTANCIA, REGRAS_TEMPO } = require('../utils/regrasEntrega');
+
+// ========================================================================================
+// 📊 FUNÇÃO DE ESTATÍSTICA: CONTAR CONSULTAS DO DIA NO LOG
+// ========================================================================================
+function exibirContagemConsultasHoje() {
+    try {
+        const LOG_USO_PATH = path.join(__dirname, '..', '..', 'logs', 'log_uso.json');
+        
+        if (!fs.existsSync(LOG_USO_PATH)) return;
+
+        const logsData = JSON.parse(fs.readFileSync(LOG_USO_PATH, 'utf-8'));
+        
+        const hoje = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+
+        const qtdHoje = logsData.filter(log => 
+            log.data === hoje && 
+            log.funcao && 
+            log.funcao.includes('Análise de Rotas')
+        ).length;
+
+        console.log(chalk.cyan(`\n📊 [OPERAÇÃO] Total de 'Análise de Rotas' solicitadas hoje (${hoje}): ${qtdHoje}\n`));
+
+    } catch (erro) {
+        console.error(chalk.red(`❌ Erro ao ler contagem do log_uso.json: ${erro.message}`));
+    }
+}
+
+// ========================================================================================
+// 🛡️ FUNÇÃO DE VALIDAÇÃO: DIAS CONSECUTIVOS
+// ========================================================================================
+function temDiasSeguidos(diasArray) {
+    if (!diasArray || diasArray.length < 2) return false;
+    const mapa = { 'SEG': 1, 'TER': 2, 'QUA': 3, 'QUI': 4, 'SEX': 5, 'SAB': 6 };
+    const indexes = diasArray.map(d => mapa[d]).sort((a, b) => a - b);
+    
+    for (let i = 0; i < indexes.length - 1; i++) {
+        if (indexes[i + 1] - indexes[i] === 1) return true;
+    }
+    return false;
+}
+
+// ========================================================================================
+// 🔄 FUNÇÃO AUXILIAR DE ROTAS: Roda o OSRM e Monta o Relatório
+// ========================================================================================
+async function finalizarAnaliseETrava(client, numero, etapasObj) {
+    const { nbSalvo, diaAdd, diaRemover, diasAtuais } = etapasObj;
+
+    if (!diaAdd && diaRemover) {
+        let msg = `✅ *ANÁLISE CONCLUÍDA*\n\n`;
+        msg += `Ação solicitada: APENAS REMOÇÃO\n`;
+        msg += `🗑️ *Dia a Remover:* ${diaRemover}\n\n`;
+        msg += `Você confirma a remoção deste dia de entrega?\nDigite *SIM* para enviar ou *NÃO* para cancelar.`;
+
+        etapasObj.etapa = 'analiseRotas_inclusao';
+        let fileState = JSON.parse(fs.readFileSync(ETAPAS_PATH, 'utf-8'));
+        fileState[numero] = etapasObj;
+        fs.writeFileSync(ETAPAS_PATH, JSON.stringify(fileState, null, 2));
+        await client.sendMessage(numero, msg);
+        return;
+    }
+
+    await client.sendMessage(numero, "⏳ Calculando distâncias até a rota mais próxima no bairro... Aguarde.");
+    const resultado = await processarAnaliseRota(nbSalvo, diaAdd);
+
+    if (!resultado || resultado.erro) {
+        const erroMsg = resultado ? resultado.erro : "Falha interna ao processar a rota.";
+        await client.sendMessage(numero, `⚠️ ${erroMsg}`);
+        let fileState = JSON.parse(fs.readFileSync(ETAPAS_PATH, 'utf-8'));
+        delete fileState[numero];
+        fs.writeFileSync(ETAPAS_PATH, JSON.stringify(fileState, null, 2));
+        return;
+    }
+
+    const { origem, vencedor } = resultado;
+    const distEmMetros = vencedor.distRuas;
+    const latDest = parseFloat(vencedor['Latitude'].replace(',', '.')).toFixed(5);
+    const lngDest = parseFloat(vencedor['Longitude'].replace(',', '.')).toFixed(5);
+
+    let msg = `✅ *ANÁLISE DE ROTA CONCLUÍDA*\n\n`;
+    msg += `📍 *DADOS DO SEU PDV:*\n`;
+    msg += `🗝️ *Chave:* ${origem.chave}\n`;
+    msg += `📅 *Dias atuais:* ${origem.dias}\n`;
+    msg += `💰 *Faturado em ${origem.mesHisto}:* ${formatarMoeda(origem.faturamento)}\n\n`;
+
+    msg += `🏆 *PDV MAIS PRÓXIMO:*\n`;
+    msg += `🛣️ *Endereço:* ${vencedor.endereco}\n`;
+    msg += `📏 *Distância:* ${distEmMetros.toFixed(0)} metros\n\n`;
+
+    if (vencedor.msgCargaDescarga) msg += `${vencedor.msgCargaDescarga}\n\n`;
+
+    let qtdDiasFuturo = diasAtuais.length;
+    if (diaRemover) qtdDiasFuturo -= 1;
+    if (diaAdd) qtdDiasFuturo += 1;
+
+    let faturamentoMinimoExigido = 0;
+    if (qtdDiasFuturo <= 1) faturamentoMinimoExigido = REGRAS_FATURAMENTO.dias_1;
+    else if (qtdDiasFuturo === 2) faturamentoMinimoExigido = REGRAS_FATURAMENTO.dias_2;
+    else faturamentoMinimoExigido = REGRAS_FATURAMENTO.dias_3_ou_mais;
+
+    if (distEmMetros < REGRAS_DISTANCIA.limite_metros) {
+        if (origem.faturamento >= faturamentoMinimoExigido) {
+            msg += `⚠️ *Aviso:* O PDV atende aos requisitos logísticos para ter ${qtdDiasFuturo} dia(s).\n\n`;
+            msg += `📋 *RESUMO:*\n`;
+            if (diaRemover) msg += `🗑️ *REMOVER:* ${diaRemover}\n`;
+            msg += `➕ *ADICIONAR:* ${diaAdd}\n\n`;
+            msg += `Deseja *CONFIRMAR* esta solicitação?\nDigite *SIM* ou *NÃO*.`;
+
+            etapasObj.etapa = 'analiseRotas_inclusao';
+            let fileState = JSON.parse(fs.readFileSync(ETAPAS_PATH, 'utf-8'));
+            fileState[numero] = etapasObj;
+            fs.writeFileSync(ETAPAS_PATH, JSON.stringify(fileState, null, 2));
+            await client.sendMessage(numero, msg);
+        } else {
+            msg += `\n❌ *Aviso:* Faturamento deste cliente (${formatarMoeda(origem.faturamento)}) está abaixo do exigido (${formatarMoeda(faturamentoMinimoExigido)}) para ${qtdDiasFuturo} dia(s).\n\n_Inclusão negada._`;
+            let fileState = JSON.parse(fs.readFileSync(ETAPAS_PATH, 'utf-8'));
+            delete fileState[numero];
+            fs.writeFileSync(ETAPAS_PATH, JSON.stringify(fileState, null, 2));
+            await client.sendMessage(numero, msg);
+        }
+    } else {
+        msg += `\n❌ *Aviso:* Rota mais próxima está a mais de ${REGRAS_DISTANCIA.limite_metros}m.\n\n_Inclusão negada._`;
+        let fileState = JSON.parse(fs.readFileSync(ETAPAS_PATH, 'utf-8'));
+        delete fileState[numero];
+        fs.writeFileSync(ETAPAS_PATH, JSON.stringify(fileState, null, 2));
+        await client.sendMessage(numero, msg);
+    }
+}
+
+// ========================================================================================
+// 🤖 FUNÇÃO PRINCIPAL DO BOT
+// ========================================================================================
 async function handleMenu(client, message, representante, numeroTelefoneLimpo, MENU_TEXT, usuariosAguardandoRelatorio) {
     const texto = message.body.trim();
     const opcao = texto.toLowerCase();
@@ -29,12 +168,9 @@ async function handleMenu(client, message, representante, numeroTelefoneLimpo, M
     try { etapas = JSON.parse(fs.readFileSync(ETAPAS_PATH, 'utf-8') || '{}'); } catch (e) {}
     const etapaAtual = etapas[numero]?.etapa;
 
-    // ============================================================================================
-    // 1. PROCESSAR RESPOSTAS DE ETAPAS ATIVAS (PDV, Remuneração, etc.)
-    // ============================================================================================
     if (etapaAtual && etapaAtual !== 'wait') {
-        if (etapaAtual === 'remuneracao') return await enviarRemuneracao(client, message);
         
+        if (etapaAtual === 'remuneracao') return await enviarRemuneracao(client, message);
         if (etapaAtual === 'pdv') {
             const finalizar = await simularHumano(message);
             await enviarResumoPDV(client, message, representante);
@@ -43,14 +179,12 @@ async function handleMenu(client, message, representante, numeroTelefoneLimpo, M
             await finalizar();
             return;
         }
-        
         if (etapaAtual === 'aguardandoEscolha') {
             const finalizar = await simularHumano(message);
             await enviarListaContatos(client, message);
             await finalizar();
             return;
         }
-        
         if (etapaAtual === 'giro_equipamentos') {
             const finalizar = await simularHumano(message);
             await enviarGiroEquipamentosPdv(client, message, representante);
@@ -59,7 +193,6 @@ async function handleMenu(client, message, representante, numeroTelefoneLimpo, M
             await finalizar();
             return;
         }
-        
         if (etapaAtual === 'coleta_ttc') {
             const finalizar = await simularHumano(message);
             await enviarColetaTtcPdv(client, message);
@@ -68,12 +201,9 @@ async function handleMenu(client, message, representante, numeroTelefoneLimpo, M
             await finalizar();
             return;
         }
-
         if (etapaAtual.startsWith('troca_setor')) {
             return await processarTroca(client, message, representante);
         }
-
-        // 🔥 CORREÇÃO APLICADA AQUI: Reconhece TODAS as etapas (nc_indicador, nc_dia, nc_tipo)
         if (etapaAtual.startsWith('nc_')) {
             const finalizar = await simularHumano(message);
             await clientesNaoCompradores(client, message, representante);
@@ -81,165 +211,207 @@ async function handleMenu(client, message, representante, numeroTelefoneLimpo, M
             return;
         }
 
+        // ========================================================================================
         // --- ETAPAS DA OPÇÃO 12 (ANÁLISE DE ROTAS) ---
-        
-        // Etapa 12.1: Recebe o NB e devolve as Estatísticas
+        // ========================================================================================
+        if (etapaAtual === 'analiseRotas_tipoDePara') {
+            if (texto !== '1' && texto !== '2') {
+                return client.sendMessage(numero, "⚠️ Opção inválida. Digite 1 para *SIM* ou 2 para *NÃO*.");
+            }
+            const isDePara = texto === '1';
+            if (isDePara) {
+                await client.sendMessage(numero, "🔄 *PROCESSO DE DE/PARA*\n\nPor favor, digite os números do *NB ANTIGO*:");
+                etapas[numero] = { etapa: 'analiseRotas_inserirNbAntigo_DePara' };
+            } else {
+                await client.sendMessage(numero, "📍 *ANÁLISE NORMAL DE ROTA*\n\nPor favor, digite os números do seu *NB* (código do cliente):");
+                etapas[numero] = { etapa: 'analiseRotas_inserirNb', isDePara: false };
+            }
+            fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+            return;
+        }
+
+        // ========== FLUXO DE/PARA ==========
+        if (etapaAtual === 'analiseRotas_inserirNbAntigo_DePara') {
+            const textoUser = message.body.trim().replace(/\D/g, ''); 
+            if (!textoUser) return client.sendMessage(numero, "⚠️ Digite apenas números.");
+
+            const setorStr = representante.setor.toString();
+            const prefixo = (parseInt(setorStr[0]) >= 4) ? '1046853_' : '296708_';
+            const nbAntigoFormatado = prefixo + textoUser;
+
+            await client.sendMessage(numero, "⏳ Buscando informações do NB Antigo na base...");
+            const stats = await obterEstatisticasPdv(nbAntigoFormatado);
+
+            if (!stats || stats.erro || stats.diasAtuais.length === 0) {
+                await client.sendMessage(numero, `❌ *Erro:* NB Antigo não encontrado ou sem dias ativos.`);
+                delete etapas[numero];
+                fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+                return;
+            }
+
+            // GATILHO DA OPÇÃO 12 NO LOG E PAINEL
+            await registrarUso(numeroTelefoneLimpo, `Análise de Rotas (De/Para)`, representante.setor);
+            logAcao('ROTAS', `Consultou NB Antigo: ${nbAntigoFormatado} | Setor: ${representante.setor}`);
+            exibirContagemConsultasHoje(); // EXIBE CONTAGEM DO DIA
+
+            const textoDias = stats.diasAtuais.join(', ');
+
+            let msg = `📍 *DADOS DO NB ANTIGO:*\n\n`;
+            msg += `🗝️ *NB Antigo:* ${nbAntigoFormatado}\n`;
+            msg += `🏪 *Fantasia:* ${stats.fantasia}\n`;
+            msg += `📅 *Dias Atuais:* ${textoDias}\n\n`;
+            msg += `⚠️ *Confirmar transferência de dias?*\nDigite *SIM* ou *NÃO*.`;
+
+            await client.sendMessage(numero, msg);
+
+            etapas[numero] = { 
+                etapa: 'analiseRotas_confirmarMesmoLocal_DePara', 
+                nbAntigo: nbAntigoFormatado, 
+                diasParaCopiarArr: stats.diasAtuais, 
+                documentoAntigo: stats.documento 
+            };
+            fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+            return;
+        }
+
+        if (etapaAtual === 'analiseRotas_confirmarMesmoLocal_DePara') {
+            if (texto.toUpperCase() === 'SIM') {
+                await client.sendMessage(numero, "✅ Confirmado!\nAgora, digite os números do *NOVO NB*:");
+                etapas[numero].etapa = 'analiseRotas_inserirNbNovo_DePara';
+                fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+            } else {
+                await client.sendMessage(numero, "❌ Cancelado.");
+                delete etapas[numero];
+                fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+            }
+            return;
+        }
+
+        if (etapaAtual === 'analiseRotas_inserirNbNovo_DePara') {
+            const textoUser = message.body.trim().replace(/\D/g, ''); 
+            if (!textoUser) return client.sendMessage(numero, "⚠️ Digite apenas números.");
+
+            const setorStr = representante.setor.toString();
+            const prefixo = (parseInt(setorStr[0]) >= 4) ? '1046853_' : '296708_';
+            const nbNovoFormatado = prefixo + textoUser;
+
+            const { nbAntigo, diasParaCopiarArr, documentoAntigo } = etapas[numero];
+            
+            salvarPedidoEntrega(nbNovoFormatado, documentoAntigo, diasParaCopiarArr);
+
+            await client.sendMessage(numero, `🎉 *DE/PARA CONCLUÍDO!*\n\n🔄 *Doador:* ${nbAntigo}\n🆕 *Receptor:* ${nbNovoFormatado}\n_Enviado para a carga do sistema._`);
+            delete etapas[numero];
+            fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+            return;
+        }
+
+        // ========== FLUXO NORMAL ==========
         if (etapaAtual === 'analiseRotas_inserirNb') {
             const textoUser = message.body.trim().replace(/\D/g, ''); 
             if (!textoUser) return client.sendMessage(numero, "⚠️ Digite apenas números.");
 
             const setorStr = representante.setor.toString();
-            const primeiroDigito = parseInt(setorStr[0]);
-            const prefixo = (primeiroDigito >= 4) ? '1046853_' : '296708_';
+            const prefixo = (parseInt(setorStr[0]) >= 4) ? '1046853_' : '296708_';
             const nbFormatado = prefixo + textoUser;
 
-            await client.sendMessage(numero, "⏳ Buscando informações do cliente e dados da região...");
+            await client.sendMessage(numero, "⏳ Buscando informações...");
 
-            // Busca as estatísticas de forma assíncrona
-            const stats = await obterEstatisticasPdv(nbFormatado);
-
-            if (stats.erro) {
-                await client.sendMessage(numero, stats.erro);
+            const bloqueado = await verificarBloqueio30Dias(nbFormatado, REGRAS_TEMPO.dias_bloqueio_alteracao);
+            if (bloqueado) {
+                await client.sendMessage(numero, `❌ *Negado:* Alteração recente detectada (Bloqueio de ${REGRAS_TEMPO.dias_bloqueio_alteracao} dias).`);
                 delete etapas[numero];
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
                 return;
             }
 
-            console.log(chalk.cyan(`🗺️ [ROTAS] Setor: ${representante.setor} | NB: ${nbFormatado} | Bairro: ${stats.bairro}`));
+            const stats = await obterEstatisticasPdv(nbFormatado);
 
-            // Formatação dos dias com a seta
-            const qtdDias = stats.diasAtuais.length;
-            const textoDias = qtdDias > 0 ? stats.diasAtuais.join(', ') : 'Nenhum';
+            if (!stats || stats.erro) {
+                await client.sendMessage(numero, stats ? stats.erro : "⚠️ Erro ao buscar dados.");
+                delete etapas[numero];
+                fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+                return;
+            }
 
-            let msg = `📍 *DADOS DO CLIENTE:*\n`;
-            msg += `🗝️ *Chave:* ${nbFormatado}\n`;
-            msg += `🏪 *Fantasia:* ${stats.fantasia}\n`;
-            msg += `💰 *Faturado em ${stats.historico.mes}:* ${formatarMoeda(stats.historico.faturamento)}\n`;
-            msg += `📅 *Entregas Atuais:* ${qtdDias} dia(s) ➡️ ${textoDias}\n\n`;
+            // GATILHO DA OPÇÃO 12 NO LOG E PAINEL
+            await registrarUso(numeroTelefoneLimpo, `Análise de Rotas`, representante.setor);
+            logAcao('ROTAS', `Consultou NB: ${nbFormatado} | Setor: ${representante.setor}`);
+            exibirContagemConsultasHoje(); // EXIBE CONTAGEM DO DIA
 
-            msg += `📊 *ESTATÍSTICAS DA REGIÃO*\n`;
-            msg += `📍 *Bairro:* ${stats.bairro}\n`;
-            msg += `🏙️ *Município:* ${stats.municipio}\n\n`;
+            let msg = `📍 *DADOS DO CLIENTE:*\n🗝️ *Chave:* ${nbFormatado}\n🏪 *Fantasia:* ${stats.fantasia}\n📅 *Entregas Atuais:* ${stats.diasAtuais.join(', ') || 'Nenhum'}\n\n`;
+            msg += `📅 *Qual dia de entrega você deseja adicionar ou alterar?*\n⚠️ _Os dias 🔴 já estão ativos (Clique para REMOVER)._\n\n`;
             
-            msg += `🚚 *Volume de Entregas da Ambev Ativas Neste Bairro:*\n`;
-            msg += `▫️ SEG: ${stats.contagemDias.SEG} PDVs\n`;
-            msg += `▫️ TER: ${stats.contagemDias.TER} PDVs\n`;
-            msg += `▫️ QUA: ${stats.contagemDias.QUA} PDVs\n`;
-            msg += `▫️ QUI: ${stats.contagemDias.QUI} PDVs\n`;
-            msg += `▫️ SEX: ${stats.contagemDias.SEX} PDVs\n`;
-            msg += `▫️ SAB: ${stats.contagemDias.SAB} PDVs\n\n`;
-
-            msg += `📅 *Qual dia de entrega você deseja analisar e possivelmente adicionar?*\n\n`;
-            msg += `1️⃣ - SEG\n2️⃣ - TER\n3️⃣ - QUA\n4️⃣ - QUI\n5️⃣ - SEX\n6️⃣ - SAB\n\n`;
-            msg += `Digite o número correspondente:`;
-                             
+            const diasMapaArr = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB'];
+            diasMapaArr.forEach((dia, i) => {
+                msg += stats.diasAtuais.includes(dia) ? `🔴 ${i + 1} - ${dia} (Já ativo)\n` : `${i + 1}️⃣ - ${dia}\n`;
+            });
+            
             await client.sendMessage(numero, msg);
             
-            // Avança para perguntar o dia, mantendo o NB na memória
-            etapas[numero] = { etapa: 'analiseRotas_qualDia', nbSalvo: nbFormatado };
+            etapas[numero] = { 
+                etapa: 'analiseRotas_qualDia', 
+                nbSalvo: nbFormatado, 
+                documentoPDV: stats.documento,
+                diasAtuais: stats.diasAtuais 
+            };
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             return;
         }
 
-        // Etapa 12.2: Recebe o Dia, Roteiriza e Aplica Travas
         if (etapaAtual === 'analiseRotas_qualDia') {
             const diasMapa = { '1': 'SEG', '2': 'TER', '3': 'QUA', '4': 'QUI', '5': 'SEX', '6': 'SAB' };
             const diaEscolhido = diasMapa[message.body.trim()];
-            
-            if (!diaEscolhido) return client.sendMessage(numero, "⚠️ Opção inválida. Digite um número de 1 a 6.");
+            if (!diaEscolhido) return client.sendMessage(numero, "⚠️ Digite um número de 1 a 6.");
 
-            const nbSalvo = etapas[numero].nbSalvo;
-            await client.sendMessage(numero, "⏳ Traçando rotas asfálticas e analisando histórico... Aguarde.");
+            const { diasAtuais } = etapas[numero];
 
-            const resultado = await processarAnaliseRota(nbSalvo, diaEscolhido);
-
-            if (resultado.erro) {
-                await client.sendMessage(numero, resultado.erro);
-                delete etapas[numero];
+            if (diasAtuais.includes(diaEscolhido)) {
+                etapas[numero].etapa = 'analiseRotas_qualDiaAdicaoAposRemocao';
+                etapas[numero].diaRemover = diaEscolhido;
+                await client.sendMessage(numero, `🗑️ *REMOVER:* ${diaEscolhido}\n\nDeseja *ADICIONAR* outro dia no lugar?\n1️⃣ - SEG\n2️⃣ - TER\n3️⃣ - QUA\n4️⃣ - QUI\n5️⃣ - SEX\n6️⃣ - SAB\n0️⃣ - SÓ REMOVER`);
                 fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
                 return;
-            }
-
-            const { origem, vencedor, candidatos } = resultado;
-            const distEmMetros = vencedor.distRuas;
-            const latDest = parseFloat(vencedor['Check In - Latitude'].replace(',', '.')).toFixed(5);
-            const lngDest = parseFloat(vencedor['Check In - Longitude'].replace(',', '.')).toFixed(5);
-
-            let msg = `✅ *ANÁLISE DE ROTA CONCLUÍDA*\n\n`;
-            
-            msg += `📍 *DADOS DO SEU PDV (Origem):*\n`;
-            msg += `🗝️ *Chave:* ${origem.chave}\n`;
-            msg += `🌐 *Coord:* ${origem.lat.toFixed(5)}, ${origem.lng.toFixed(5)}\n`;
-            msg += `📅 *Dias de entrega atuais:* ${origem.dias}\n`;
-            msg += `💰 *Faturado em ${origem.mesHisto}:* ${formatarMoeda(origem.faturamento)}\n\n`;
-
-            msg += `🚚 *DIA DESEJADO:* ${diaEscolhido}\n\n`;
-
-            msg += `🏆 *PDV MAIS PRÓXIMO ENCONTRADO*\n`;
-            msg += `🗝️ *Chave:* ${vencedor['Chave']}\n`;
-            msg += `🛣️ *Endereço:* ${vencedor.endereco}\n`;
-            msg += `📏 *Distância (Ruas):* ${distEmMetros.toFixed(0)} metros\n`;
-            msg += `🌐 *Coord:* ${latDest}, ${lngDest}\n\n`;
-
-            msg += `🔹 *OUTROS CANDIDATOS NA REGIÃO:*\n`;
-            candidatos.forEach((c, index) => {
-                const cDist = c.distRuas ? c.distRuas.toFixed(0) + 'm' : 'N/A';
-                msg += `${index + 1}️⃣ ${c['Chave']} - ${cDist}\n`;
-            });
-
-            // REGRAS DE NEGÓCIO (Travas)
-            const LIMITE_METROS = 300; 
-            const LIMITE_FATURAMENTO = 999.9999; 
-
-            if (distEmMetros < LIMITE_METROS) {
-                if (origem.faturamento >= LIMITE_FATURAMENTO) {
-                    msg += `\n⚠️ *Aviso:* O PDV atende aos requisitos de distância (< ${LIMITE_METROS}m) e faturamento mínimo.\n\n` + 
-                           `Deseja *SOLICITAR A INCLUSÃO* deste dia de entrega?\n` +
-                           `Digite *SIM* para confirmar ou *NÃO* para cancelar e voltar ao menu.`;
-                           
-                    await client.sendMessage(numero, msg);
-                    
-                    etapas[numero] = { 
-                        etapa: 'analiseRotas_inclusao', 
-                        nbSalvo: nbSalvo, 
-                        dia: diaEscolhido,
-                        chaveMaisProximo: vencedor['Chave'],
-                        distancia: distEmMetros.toFixed(0),
-                        latVencedor: latDest,
-                        lngVencedor: lngDest,
-                        faturamento: origem.faturamento
-                    };
-                    fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-                } else {
-                    console.log(chalk.red(`⛔ [ROTAS] Negado por Faturamento (${formatarMoeda(origem.faturamento)})`));
-                    msg += `\n❌ *Aviso:* O PDV mais próximo está dentro da distância ideal (< ${LIMITE_METROS}m), porém o faturamento deste cliente (${formatarMoeda(origem.faturamento)}) está abaixo da trava mínima exigida.\n\n_Inclusão não permitida._`;
-                    msg += `\n\n*(Retornando ao menu principal...)*`;
-                    await client.sendMessage(numero, msg);
-                    delete etapas[numero];
-                    fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-                }
             } else {
-                console.log(chalk.red(`⛔ [ROTAS] Negado por Distância (${distEmMetros.toFixed(0)}m)`));
-                msg += `\n❌ *Aviso:* O PDV mais próximo com entrega neste dia está a mais de ${LIMITE_METROS}m.\n\n_Inclusão não permitida._`;
-                msg += `\n\n*(Retornando ao menu principal...)*`;
-                await client.sendMessage(numero, msg);
-                delete etapas[numero];
-                fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
+                const diasFuturos = [...diasAtuais, diaEscolhido];
+                if (temDiasSeguidos(diasFuturos)) return client.sendMessage(numero, "⚠️ *Regra Logística:* Não é permitido dias consecutivos (ex: SEG e TER).");
+                etapas[numero].diaRemover = null;
+                etapas[numero].diaAdd = diaEscolhido;
+                return await finalizarAnaliseETrava(client, numero, etapas[numero]);
             }
-            return;
         }
 
-        // Etapa 12.3: Processa a Resposta Final (SIM/NÃO)
-        if (etapaAtual === 'analiseRotas_inclusao') {
-            const resp = message.body.trim().toUpperCase();
+        if (etapaAtual === 'analiseRotas_qualDiaAdicaoAposRemocao') {
+            const numDigitado = message.body.trim();
+            const diasMapa = { '1': 'SEG', '2': 'TER', '3': 'QUA', '4': 'QUI', '5': 'SEX', '6': 'SAB' };
             
-            if (resp === 'SIM') {
-                const { nbSalvo, dia, chaveMaisProximo, distancia, latVencedor, lngVencedor, faturamento } = etapas[numero];
-                const setor = representante.setor;
+            if (numDigitado === '0') {
+                etapas[numero].diaAdd = null; 
+                return await finalizarAnaliseETrava(client, numero, etapas[numero]);
+            }
+
+            const diaAdicionado = diasMapa[numDigitado];
+            if (!diaAdicionado || etapas[numero].diaRemover === diaAdicionado || etapas[numero].diasAtuais.includes(diaAdicionado)) {
+                return client.sendMessage(numero, "⚠️ Opção inválida ou dia já ativo.");
+            }
+
+            const diasFuturos = etapas[numero].diasAtuais.filter(d => d !== etapas[numero].diaRemover);
+            diasFuturos.push(diaAdicionado);
+            if (temDiasSeguidos(diasFuturos)) return client.sendMessage(numero, "⚠️ *Regra Logística:* Não é permitido dias consecutivos.");
+
+            etapas[numero].diaAdd = diaAdicionado;
+            return await finalizarAnaliseETrava(client, numero, etapas[numero]);
+        }
+
+        if (etapaAtual === 'analiseRotas_inclusao') {
+            if (message.body.trim().toUpperCase() === 'SIM') {
+                const { nbSalvo, documentoPDV, diasAtuais, diaAdd, diaRemover } = etapas[numero];
                 
-                salvarPedidoEntrega(nbSalvo, setor, dia, chaveMaisProximo, distancia, latVencedor, lngVencedor, faturamento);
-                console.log(chalk.green(`✅ [ROTAS] Pedido salvo com sucesso | PDV: ${nbSalvo} | Dia: ${dia}`));
-                await client.sendMessage(numero, "✅ Solicitação de inclusão registrada com sucesso! A equipe de rotas será notificada.");
+                let arrayDiasFinais = diasAtuais.filter(d => d !== diaRemover);
+                if (diaAdd) arrayDiasFinais.push(diaAdd);
+
+                salvarPedidoEntrega(nbSalvo, documentoPDV, arrayDiasFinais);
+                
+                await client.sendMessage(numero, "✅ Solicitação registrada com sucesso no sistema de rotas!");
             } else {
                 await client.sendMessage(numero, "❌ Solicitação cancelada.");
             }
@@ -251,7 +423,7 @@ async function handleMenu(client, message, representante, numeroTelefoneLimpo, M
     }
 
     // ============================================================================================
-    // 2. SWITCH DO MENU PRINCIPAL (Opções 1 a 12)
+    // MENU PRINCIPAL
     // ============================================================================================
     const CAMINHO_CHECK_PDF = String.raw`\\revenda.local\publico\Arquivos\VENDAS\METAS E PROJETOS\2026\6 - JUNHO\_GERADOR PDF\ACOMPS\411\411_GiroEquipamentos.pdf`;
     const CAMINHO_CHECK_IMAGEM = String.raw`\\revenda.local\publico\Arquivos\VENDAS\METAS E PROJETOS\2026\6 - JUNHO\_GERADOR PDF\IMAGENS\GV4\MATINAL_GV4_page_1.jpg`;
@@ -263,106 +435,23 @@ async function handleMenu(client, message, representante, numeroTelefoneLimpo, M
                 const finalizar = await simularHumano(message);
                 await enviarRelatoriosPdf(client, message, representante);
                 await finalizar();
-                await registrarUso(numeroTelefoneLimpo, 'Relatório PDF', representante.setor);
-            } else {
-                await client.sendMessage(numero, MSG_INDISPONIVEL);
-                usuariosAguardandoRelatorio[numero] = 'pdf';
-            }
-            break;
-        }
-        case '2': {
-            const pronto = await verificarArquivoAtualizado(CAMINHO_CHECK_IMAGEM);
-            if (pronto) {
-                const finalizar = await simularHumano(message);
-                await enviarRelatoriosImagem(client, message, representante);
-                await finalizar();
-                await registrarUso(numeroTelefoneLimpo, 'Relatório Imagem', representante.setor);
-            } else {
-                await client.sendMessage(numero, MSG_INDISPONIVEL);
-                usuariosAguardandoRelatorio[numero] = 'imagem';
-            }
-            break;
-        }
-        case '3': {
-            const finalizar = await simularHumano(message, 'recording');
-            await client.sendMessage(numero, 'Envie mensagem para o Yuri APR 3299982517 com nb e print do problema');
-            await finalizar();
-            break;
-        }
-        case '4': {
-            const finalizar = await simularHumano(message);
-            await enviarRemuneracao(client, message);
-            await finalizar();
-            break;
-        }
-        case '5': {
-            const finalizar = await simularHumano(message);
-            await client.sendMessage(numero, 'Envie o código do PDV (apenas números):');
-            etapas[numero] = { etapa: 'pdv' };
-            fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-            await finalizar();
-            break;
-        }
-        case '6': {
-            const finalizar = await simularHumano(message);
-            await enviarListaContatos(client, message);
-            await finalizar();
-            break;
-        }
-        case '7': {
-            const finalizar = await simularHumano(message);
-            await client.sendMessage(numero, 'Envie o código do PDV para Coleta TTC:');
-            etapas[numero] = { etapa: 'coleta_ttc' };
-            fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-            await finalizar();
-            break;
-        }
-        case '8': {
-            const finalizar = await simularHumano(message);
-            await enviarCts(client, message, representante);
-            await finalizar();
-            break;
-        }
-        case '9': {
-            const finalizar = await simularHumano(message);
-            await client.sendMessage(numero, 'Envie o código do PDV para Giro 🤑:');
-            etapas[numero] = { etapa: 'giro_equipamentos' };
-            fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-            await finalizar();
-            break;
-        }
-        case '10': {
-            const finalizar = await simularHumano(message);
-            await client.sendMessage(numero, '🔄 *CORRIGIR SETOR*\n\nDigite apenas o *NÚMERO DO SETOR* novo:');
-            etapas[numero] = { etapa: 'troca_setor_passo1' };
-            fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
-            await finalizar();
-            break;
-        }
-        case '11': {
-            const finalizar = await simularHumano(message);
-            await clientesNaoCompradores(client, message, representante);
-            await finalizar();
+            } else await client.sendMessage(numero, MSG_INDISPONIVEL);
             break;
         }
         case '12': {
             const finalizar = await simularHumano(message);
-            await client.sendMessage(numero, "📍 *Análise de Rotas*\n\nPor favor, digite os números do seu *NB* (código do cliente):");
-            etapas[numero] = { etapa: 'analiseRotas_inserirNb' };
+            await client.sendMessage(numero, "📍 *Análise de Rotas*\n\nEste é um processo de *DE/PARA*? (Troca CNPJ)\n1️⃣ - SIM\n2️⃣ - NÃO\n\nDigite o número correspondente:");
+            etapas[numero] = { etapa: 'analiseRotas_tipoDePara' };
             fs.writeFileSync(ETAPAS_PATH, JSON.stringify(etapas, null, 2));
             await finalizar();
             break;
         }
-        case 'menu': {
+        case 'menu':
             await client.sendMessage(numero, MENU_TEXT);
             break;
-        }
-        default: {
-            if (!texto.startsWith('/')) {
-                await client.sendMessage(numero, `❌ Opção inválida.\n\n${MENU_TEXT}`);
-            }
+        default:
+            if (!texto.startsWith('/')) await client.sendMessage(numero, `❌ Opção inválida.\n\n${MENU_TEXT}`);
             break;
-        }
     }
 }
 

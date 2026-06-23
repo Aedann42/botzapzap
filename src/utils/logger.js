@@ -1,4 +1,3 @@
-// src/utils/logger.js
 const chalk = require('chalk');
 const { carregarStatsDoLog, registrarEstatistica, getStats } = require('./stats');
 
@@ -43,6 +42,7 @@ const logAcao = (tipo, mensagem) => {
         'GIRO': 'giro',
         'ALTERAR_SETOR': 'alterarSetor',
         'NAO_COMPRADORES': 'naoCompradores',
+        'ROTAS': 'analiseRotas', // 🟢 CONTABILIZADOR DE ROTAS
         'ERRO': 'erros'
     };
 
@@ -66,6 +66,7 @@ const logAcao = (tipo, mensagem) => {
         case 'GIRO': console.log(chalk.cyan(`[9 - GIRO] ${mensagem}`)); break;
         case 'ALTERAR_SETOR': console.log(chalk.redBright(`[10 - SETOR] ${mensagem}`)); break;
         case 'NAO_COMPRADORES': console.log(chalk.greenBright.bold(`[11 - INDICADORES] ${mensagem}`)); break;
+        case 'ROTAS': console.log(chalk.blueBright.bold(`[12 - ROTAS] ${mensagem}`)); break; // 🟢 COR DA ROTA NO LOG
         case 'ERRO': console.log(chalk.bgRed.white.bold(`[ERRO] ${mensagem}`)); break;
         default: console.log(chalk.gray(`[SISTEMA] ${mensagem}`)); break;
     }
@@ -75,11 +76,10 @@ const logAcao = (tipo, mensagem) => {
 
 // Da a partida no sistema inteiro e mostra o resumo
 const iniciarPainel = () => {
-    carregarStatsDoLog(); // Lê o JSON primeiro para restaurar o total do dia
+    carregarStatsDoLog(); 
     
-    const s = getStats(); // Pega os números que acabaram de ser lidos
+    const s = getStats(); 
     
-    // Desenha o Dashboard completo no terminal
     console.log(chalk.cyan('\n================================================='));
     console.log(chalk.cyan.bold('  📊 RESUMO DE ATENDIMENTOS HOJE (RECUPERADOS)'));
     console.log(chalk.cyan('================================================='));
@@ -97,8 +97,8 @@ const iniciarPainel = () => {
     console.log(chalk.white(` ► [9] Consulta Giro:       ${s.giro || 0}`));
     console.log(chalk.white(` ► [10] Alterar Setor:      ${s.alterarSetor || 0}`));
     console.log(chalk.white(` ► [11] Não Compradores:    ${s.naoCompradores || 0}`));
+    console.log(chalk.white(` ► [12] Análise de Rotas:   ${s.analiseRotas || 0}`)); 
     
-    // Se tiver algum erro logado no dia, ele destaca em vermelho no final
     if (s.erros > 0) {
         console.log(chalk.gray('-------------------------------------------------'));
         console.log(chalk.bgRed.white.bold(` ► ERROS REGISTRADOS:       ${s.erros} `));
@@ -106,13 +106,10 @@ const iniciarPainel = () => {
     
     console.log(chalk.cyan('=================================================\n'));
 
-    // Inicia os loops de atualização a cada 10 seg e memória a cada 5 min
     setInterval(atualizarStatusPainel, 10000);
     setInterval(monitorarMemoria, 5 * 60 * 1000);
     
-    // Já força a barra de título a ficar com os números certos na mesma hora
     atualizarStatusPainel();
 };
 
-// 👇 ESTA É A LINHA QUE DEVE TER SUMIDO. ELA É A CHAVE MESTRA!
 module.exports = { logAcao, iniciarPainel, logMatrix };
