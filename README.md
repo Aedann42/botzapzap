@@ -67,175 +67,225 @@ A colaboração com a gestão também foi fundamental. A implementação da cama
 
 ---
 
-Agora sim! Com o Push feito, suas alterações de Janeiro estão oficialmente no histórico.
+📜 CHANGELOG — BotZapZap
+Todas as alterações notáveis deste projeto estão documentadas abaixo em ordem cronológica.
 
-Aqui está o changelog completo, desde o início do projeto até os 9 commits que você acabou de subir hoje, tudo padronizado.
+[ 0.1.0 ] — 📅 09 de Abril de 2025
+✨ Adicionado
+Setup Inicial: Configuração do ambiente de desenvolvimento Node.js e estrutura do projeto no servidor.
 
-📜 Histórico de Atualizações do Projeto
-🚀 Versão [ Pré-lançamento ] — 📅 09 de Abril de 2025
-✨ Adicionado:
+Higienização do Repositório: Remoção de arquivos pesados e desnecessários do histórico inicial.
 
-🏁 Setup Inicial: Reinício do projeto e configuração no servidor.
+[ 1.0.0 ] — 📅 17 de Abril de 2025
+✨ Adicionado
+Lançamento Oficial (v1.0.0): Primeira versão estável em ambiente de produção.
 
-🧹 Limpeza: O repositório foi limpo para remover arquivos pesados e desnecessários.
+Funcionalidades Base: Envio de relatórios em PDF/Imagem, consulta de remuneração protegida por matrícula, contatos de emergência e suporte.
 
-🚀 Versão [ 1.0.0 ] — 📅 17 de Abril de 2025
-✨ Adicionado:
+Camada de Autenticação: Controle de acesso de usuários baseado no arquivo representantes.json.
 
-🤖 Lançamento Oficial: Primeira versão estável do bot.
+Interface do Usuário: Adição de emojis ao menu interativo para melhor usabilidade.
 
-📦 Funcionalidades Essenciais: Relatórios em PDF/Imagem, acesso à Remuneração, Contatos e Suporte.
+[ 1.0.1 ] — 📅 23 de Maio de 2025
+✨ Adicionado
+Consulta de Tarefas de PDV: Leitura direta de arquivos .xlsx na rede interna para listagem de pendências em pontos de venda.
 
-🔐 Segurança: Autorização de usuários baseada no arquivo representantes.json.
+🐛 Corrigido
+Estabilidade e Concorrência: Ajuste na lógica assíncrona para suportar requisições simultâneas de múltiplos usuários.
 
-🎨 Interface: Adição de emojis no menu para uma experiência mais amigável.
+Ajustes de Infraestrutura: Correção na resolução de caminhos de arquivos e mensagens de retorno.
 
-🚀 Versão [ 1.0.1 ] — 📅 23 de Maio de 2025
-✨ Adicionado:
+[ 1.0.2 ] — 📅 25 de Julho de 2025
+✨ Adicionado
+Menu Sob Demanda: Comando MENU para reagendar e reexibir a lista de opções a qualquer momento.
 
-📋 Tarefas de PDV: Função para listar tarefas diretamente de um arquivo .xlsx na rede.
+🛠️ Alterado
+Modularização: Isolamento do texto e das opções do menu no arquivo menuOptions.js.
 
-🐛 Corrigido:
+Gerenciamento de Grupos: O bot passa a marcar como vistas as mensagens de grupos onde não foi diretamente mencionado, mantendo a caixa limpa.
 
-⚡ Estabilidade: Melhorada a lógica para lidar com múltiplas solicitações simultâneas.
+[ 1.0.3 ] — 📅 28 de Agosto de 2025
+✨ Adicionado
+Verificação de Versão de Arquivos: Garantia de que o bot sempre entregue a versão mais recente dos relatórios e planilhas disponíveis na rede.
 
-🔧 Ajustes Técnicos: Correção em caminhos de arquivos e mensagens de retorno.
+🛠️ Alterado
+Refatoração Módulo utils: Reorganização interna de arquivos utilitários para facilitar a manutenção.
 
-🚀 Versão [ 1.0.2 ] — 📅 25 de Julho de 2025
-✨ Adicionado:
+[ 1.0.4 ] — 📅 05 de Setembro de 2025
+✨ Adicionado
+Fila de Espera Assíncrona: Sistema de notificação automática disparado assim que um relatório solicitado é gerado na rede.
 
-📱 Menu Sob Demanda: Comando menu para solicitar a lista de opções a qualquer momento. Usuario precisa usar a palavra MENU.
+🛠️ Alterado
+Otimização da Fila de Remuneração: Aprimoramento do fluxo de entrega para garantir o envio de todas as solicitações em momentos de pico.
 
-🛠 Alterado:
+[ 1.1.0 ] — 📅 11 de Setembro de 2025
+✨ Adicionado
+Módulo Operador (/rep): Permite que supervisores executem comandos em nome de um representante comercial diretamente pelo WhatsApp Web.
 
-🧩 Modularização: Texto do menu movido para menuOptions.js para facilitar edições.
+Campanha de Ativação Proativa (/ativar): Comando para onboarding e engajamento inicial de representantes cadastrados.
 
-👀 Limpeza de Visualização: O bot agora marca como "vistas" as mensagens de grupos onde não é mencionado.
+🛠️ Alterado
+Bypass de Autenticação: Operadores autorizados saltam as etapas de verificação ao prestar suporte a representantes.
 
-🚀 Versão [ 1.0.3 ] — 📅 28 de Agosto de 2025
-✨ Adicionado:
+Captura de Dados: Melhoria na lógica de identificação do código do PDV.
 
-🕒 Verificação de Versão: Garantia de que o bot sempre envie a versão mais recente dos arquivos.
+🐛 Corrigido
+Looping de Notificação: Correção na campanha /ativar para registrar corretamente os usuários que já receberam a mensagem.
 
-🛠 Alterado:
+[ 1.1.1 ] — 📅 16 de Setembro de 2025
+🛠️ Alterado
+Lógica do Onboarding: O comando /ativar passa a verificar o histórico de logs dos últimos 7 dias em vez de zerar os dados diariamente.
 
-📂 Refatoração: Melhor organização de pastas (utils) para facilitar a manutenção do código.
+[ 1.1.2 ] — 📅 26 de Setembro de 2025
+✨ Adicionado
+Consultas Logísticas: Novas funções para consulta de Coleta TTC em PDVs e Conferência de Cartões de Transporte (CT).
 
-🚀 Versão [ 1.0.4 ] — 📅 05 de Setembro de 2025
-✨ Adicionado:
+Perfil de Gestão (Bypass de Saudação): Cargos executivos (Gerente Comercial e Gerentes de Vendas) adicionados em lista de exceção para navegação direta.
 
-⏳ Fila de Espera: Notificação automática quando um relatório solicitado fica disponível.
+🐛 Corrigido
+Refinamento na mensagem de confirmação de disponibilidade de relatórios.
 
-🛠 Alterado:
+[ 1.1.3 ] — 📅 06 de Outubro de 2025
+🛠️ Alterado
+Envio de Remuneração Completa: Envio consolidado de todos os arquivos presentes no diretório do usuário (descartando temporários).
 
-📨 Otimização: Melhoria na fila de envio de remuneração para garantir a entrega de todas as solicitações.
+🐛 Corrigido
+Correção de Fila Dupla: Resolução de bug no gerenciamento de filas que misturava notificações entre arquivos PDF e imagens.
 
-🚀 Versão [ 1.2.0 ] — 📅 11 de Setembro de 2025
-✨ Adicionado:
+[ 1.1.4 ] — 📅 15 de Outubro de 2025
+✨ Adicionado
+Giro de Equipamentos de PDV: Módulo para acompanhamento de dados de giro de comodatos, atendendo metas do programa de excelência (SPO Ambev).
 
-👨‍💻 Módulo Operador: Administradores podem executar comandos em nome de usuários via WhatsApp Web (/rep).
+[ 1.1.5 ] — 📅 22 de Outubro de 2025
+✨ Adicionado
+Lembrete Automático de Ponto: Agendamento automatizado de alertas de registro de ponto via node-cron.
 
-📢 Campanha de Ativação: Comando /ativar para onboarding proativo de representantes.
+🛠️ Alterado
+Filtro por Revenda: Segregação das informações e permissões de acordo com a unidade/revenda do representante.
 
-🛠 Alterado:
+[ 1.1.6 ] — 📅 24 de Outubro de 2025
+🛠️ Alterado
+Atualização de Infraestrutura de Conexão: Atualização crítica no protocolo da biblioteca do WhatsApp para suportar mensagens em grupos após mudanças na plataforma.
 
-⏩ Bypass de Autenticação: Comandos do operador pulam etapas de verificação para agilizar o suporte (/rep).
+[ 1.1.7 ] — 📅 31 de Outubro de 2025
+✨ Adicionado
+Expansão dos Lembretes: Inclusão de novos setores operacionais nas regras de notificação de ponto.
 
-🧠 Captura de Dados: Lógica de captura do código do PDV aprimorada.
+Documentação: Atualização completa do README.md.
 
-🐛 Corrigido:
+[ 1.1.8 ] — 📅 04 de Novembro de 2025
+🛠️ Alterado
+Redirecionamento dinâmico da origem das informações para apontar para o diretório do mês corrente.
 
-🔄 Looping de Notificação: A campanha /ativar agora registra corretamente os usuários contatados.
+[ 1.2.0 ] — 📅 26 de Novembro de 2025
+🛠️ Alterado (Migração Estrutural de Autenticação)
+Migração para LID (WhatsApp Identifiers): Alteração da chave primária de identificação dos usuários, migrando do número de telefone direto para a chave LID, acompanhando as novas diretrizes de privacidade do WhatsApp.
 
-🚀 Versão [ 1.2.1 ] — 📅 16 de Setembro de 2025
-🛠 Alterado:
+Tratamento Manual de LIDs: Suporte para cadastro e validação de LIDs coletados manualmente.
 
-📅 Lógica Inteligente: O comando /ativar agora verifica o uso real nos últimos 7 dias (logs) em vez de zerar diariamente.
+[ 1.2.1 ] — 📅 03 de Dezembro de 2025
+🛠️ Alterado
+Refinamento na lógica do Resumo de PDVs e consolidação do mês vigente.
 
-🚀 Versão [ 1.2.2 ] — 📅 26 de Setembro de 2025
-✨ Adicionado:
+[ 1.2.2 ] — 📅 12 de Dezembro de 2025
+✨ Adicionado
+Respostas em Citação (Quote Context): O bot passa a responder citando a mensagem original do usuário ao entregar planilhas de remuneração, facilitando a identificação no histórico do chat.
 
-🔍 Novas Funções: Consulta de Coleta TTC PDV e Conferência de CT.
+[ 1.2.3 ] — 📅 17 de Dezembro de 2025
+🛠️ Alterado
+Inclusão de aviso temporário no menu do usuário informando sobre oscilações conhecidas na API do WhatsApp.
 
-🎩 Exceções: Adicionados staffs (que seriam os Gerentes de Vendas da empresa e o Gerente Comercial) para pular a saudação inicial.
+[ 1.3.0 ] — 📅 20 de Janeiro de 2026
+✨ Adicionado
+Padronização Global de Logs: Registros unificados identificando o nome do arquivo de origem para agilizar o debug.
 
-🐛 Corrigido:
+🛠️ Alterado & Corrigido
+Otimização de Performance: Remoção de delays manuais no fluxo de mensagens para reduzir a latência de resposta.
 
-💬 Feedback: Ajuste na mensagem automática de disponibilidade de relatório.
+Correção no Envio de Mensagens: Ajuste na função sendSeen devido a quebras causadas por atualizações da biblioteca do Puppeteer.
 
-🚀 Versão [ 1.2.3 ] — 📅 06 de Outubro de 2025
-🛠 Alterado:
+Restauração de Função: Recuperada a função checkDateReports necessária para validação das datas dos arquivos.
 
-📂 Remuneração Completa: Envio de TODOS os arquivos da pasta do usuário (filtrando temporários).
+⚠️ Descontinuado / Projeto Cancelado
+Automação de "Extras" via Voz/IA (Cancelado): A proposta de converter áudios e textos informais em pedidos de extras padronizados para o faturamento foi descontinuada. Testes operacionais demonstraram que os modelos de reconhecimento de fala apresentavam alta taxa de erro com termos técnicos do setor, inviabilizando a automação segura no ambiente de produção.
 
-🐛 Corrigido:
+[ 1.3.1 ] — 📅 11 de Fevereiro de 2026
+🛠️ Alterado
+Automação via Google Forms: Desativação pontual do cron interno para transição de gatilhos orientados a formulários.
 
-🚦 Fila Dupla: Corrigido bug que misturava filas de PDF e Imagem, resolvendo notificações cruzadas incorretas.
+Recepção de PDVs: Criação de fluxo de boas-vindas para PDVs contendo contatos estratégicos de outros setores.
 
-🚀 Versão [ 1.2.4 ] — 📅 15 de Outubro de 2025
-✨ Adicionado:
+🔐 Segurança
+Ajustes nas regras do .gitignore para dados temporários.
 
-⚙️ Giro de Equipamentos: Nova função para enviar dados de giro dos PDVs pois há meta de SPO (programa de excelencia da Ambev).
+[ 1.3.2 ] — 📅 19 de Fevereiro de 2026
+🛠️ Alterado
+Sanitização de Documentos PDF: Ajuste no validador de relatórios em PDF para suportar documentos com variação de paginação (ex: arquivos com menos de 3 páginas).
 
-🚀 Versão [ 1.2.5 ] — 📅 22 de Outubro de 2025
-✨ Adicionado:
+🔐 Segurança
+Ocultação de números telefônicos institucionais e mensagens sensíveis de atendimento via .gitignore.
 
-⏰ Lembrete de Ponto: Nova função automatizada com node-cron.
+[ 1.4.0 ] — 📅 04 de Março de 2026
+✨ Adicionado
+Consulta Tática de Não Compradores (Opção 11): Funcionalidade para relatórios imediatos de PDVs que ainda não realizaram pedidos no mês vigente.
 
-🛠 Alterado:
+Autoatendimento de Alteração de Setor: Permite que o próprio representante solicite a mudança de setor diretamente pelo WhatsApp, integrado a um fluxo de aprovação pendente enviado ao operador principal.
 
-🏷️ Filtro por Revenda: Implementação de lógica para diferenciar informações conforme a revenda do representante.
+[ 1.4.1 ] — 📅 13 de Março de 2026
+✨ Adicionado
+Auto-Healing de Nomes (autoHealingNome): Mecanismo autônomo via Puppeteer para coletar e atualizar automaticamente nomes de RNs ausentes no cadastro.
 
-🚀 Versão [ 1.2.6 ] — 📅 24 de Outubro de 2025
-🛠 Alterado:
+Simulação de Comportamento Humano: Implementação de delays randômicos e padrões de digitação humanizada para mitigar bloqueios da API.
 
-🏗️ Infraestrutura: Atualização crítica na biblioteca de conexão para suportar envio em grupos no novo formato do WhatsApp.
+Módulo de Observabilidade & Métricas:
 
-🚀 Versão [ 1.2.7 ] — 📅 31 de Outubro de 2025
-✨ Adicionado:
+Implementação de logger colorido descolado do fluxo principal.
 
-📢 Expansão do Lembrete: Inclusão de novos setores na regra de notificações de ponto.
+Monitoramento de uso de memória RAM.
 
-📘 Documentação: Atualização do README.md.
+Contador em tempo real de atendimentos realizados.
 
-🚀 Versão [ 1.2.8 ] — 📅 04 de Novembro de 2025
-🛠 Alterado:
+Lógica de saudação inteligente baseada no histórico recente de interações do log.
 
-📅 Fonte de Dados: Ajuste na origem das informações para o a pasta do mês atual.
+[ 1.5.0 ] — 📅 17 de Março de 2026
+✨ Adicionado
+Análise Geográfica de Distância entre PDVs: Algoritmo que calcula a proximidade entre pontos de venda e identifica entregas ativas na mesma região, auxiliando representantes na solicitação de novos dias/janelas de entrega.
 
-🚀 Versão [ 1.3.0 ] — 📅 26 de Novembro de 2025
-🛠 Alterado (Grande Atualização):
+🔐 Segurança & Higienização do Repositório (Data Security Purge)
+Expurgo de Dados Sensíveis: Remoção definitiva de planilhas operacionais e arquivos CSV históricos (pedidosDataDeEntrega.csv, Base_PDVs_Atualizada.csv e pasta data) da árvore pública do Git.
 
-🧠 Nova Lógica (LID): Alteração estrutural para usar o LID como chave principal.
+Aprimoramento do .gitignore: Bloqueio estrito de dados operacionais e de clientes para conformidade com privacidade.
 
-✍️ Dados Manuais: Suporte para processar LIDs coletados manualmente pois após atualização o whatsapp parou de olhar o telefone do usuário e tem usado um LID que parece aleatório.
+[ 1.5.1 ] — 📅 09 de Abril de 2026
+🛠️ Alterado
+Estabilidade do Puppeteer: Adicionado o argumento --disable-gpu nas configurações de inicialização do robô, reduzindo consumo de memória e evitando falhas em ambientes Headless.
 
-🚀 Versão [ 1.3.1 ] — 📅 03 de Dezembro de 2025
-🛠 Alterado:
+Otimização do RotasHandler: Refatoração na lógica de processamento de rotas comerciais.
 
-📊 Refinamento: Melhoria na lógica do Resumo PDV e mês vigente.
+Atualização de Mês Vigente: Parametrização para Abril/2026.
 
-🚀 Versão [ 1.3.2 ] — 📅 12 de Dezembro de 2025
-✨ Adicionado:
+[ 1.5.2 ] — 📅 07 de Maio de 2026
+✨ Adicionado
+Filtro Avançado de Oportunidades por Rota: Permissão para que o representante consulte oportunidades filtradas pela rota do dia atual ou pela rota completa (todos os dias).
 
-💬 Contexto (Quote): Envio de Remuneração - O bot agora responde citando a mensagem original do usuário para melhor organização visual e entendimento do erro.
+🐛 Corrigido
+Correção no nome do arquivo do contrato de exclusividade.
 
-🚀 Versão [ 1.3.3 ] — 📅 17 de Dezembro de 2025
-🛠 Alterado:
+Atualização de mês vigente para Maio/2026.
 
-⚠️ Aviso de Sistema: Mensagem temporária no menu alertando sobre instabilidade na API do WhatsApp.
+[ 1.5.3 ] — 📅 20 de Maio de 2026
+🛠️ Alterado
+Melhorias de Auditoria: Aprimoramento na estruturação dos logs de sistema para melhor rastreamento de requisições.
 
-🚀 Versão [ 1.4.0 ] — 📅 20 de Janeiro de 2026
-✨ Adicionado:
+[ 1.5.4 ] — 📅 11 de Junho de 2026
+🛠️ Alterado
+Portabilidade de Caminhos de Rede: Transição de caminhos absolutos de servidor para caminhos relativos, garantindo compatibilidade entre diferentes ambientes de execução.
 
-🤖 Automação de Extras: Início da implementação da mecânica para o bot digitar "extras" de forma autônoma, convertendo audios em texto e texto para um padrão intelegível pelo setor de faturamento [ainda não foi implementado pois a IA confunde muito as palavras]
+Atualização de mês vigente para Junho/2026.
 
-📝 Padronização de Logs: Unificação do formato de registros para facilitar o monitoramento e debug.
+[ 2.0.0 ] — 📅 23 de Junho de 2026
+✨ Adicionado
+Módulo de Automação de Roteirização e Validação Logística: Implementação de motor de análise de rotas para apoio ao planejamento logístico e validação de entregas.
 
-🛠 Alterado:
-
-⚡ Performance: Removido o delay proposital para tentar melhorar a velocidade de resposta do bot.
-
-🧹 Limpeza de Código: Removida a função checkDateReports (considerada obsoleta) e correção de redundâncias no código.
-
-🔧 Manutenção: Ajustes diversos de início de mês e modificações técnicas na função de envio (client.sendS...) pois uma atualização acabou quebrando ela.
+🛠️ Alterado
+Refatoração Arquitetural do menuHandler: Desmembramento do arquivo principal de menu em submódulos especializados, facilitando a manutenção e escalabilidade do código.
